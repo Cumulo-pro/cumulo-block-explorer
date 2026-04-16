@@ -68,31 +68,28 @@ Each module is served from **static JSON files** written by a background collect
 | Network | Chain ID | Block Time | Status |
 |---|---|---|---|
 | Cosmos Hub | cosmoshub-4 | ~6s | Active |
-| Celestia | celestia | ~12s | Active |
-| XRPL EVM | xrplevm-mainnet | ~6s | Active |
+| Celestia | celestia | ~6s | Active |
+| XRPL EVM | xrplevm_1440000-1 | ~6s | Active |
 | Story | story | ~3s | Active |
-| Axone | axone-1 | ~6s | Active |
-| Dymension | dymension_1100-1 | ~6s | Active |
-| Warden | warden-mainnet | ~6s | Active |
+
 
 ### Cosmos SDK (Testnet)
 
 | Network | Chain ID | Status |
 |---|---|---|
-| Cosmos Testnet | theta-testnet-001 | Active |
+| Cosmos Testnet | provider | Active |
 | Celestia Mocha | mocha-4 | Active |
-| XRPL EVM Testnet | xrplevm-testnet | Active |
+| XRPL EVM Testnet | xrplevm_1449000-1 | Active |
 | Story Aeneid | aeneid | Active |
 | SEDA Testnet | seda-1-testnet | Active |
-| Axone Dendrite-2 | axone-dentrite-2 | Active |
 
 ### Non-Cosmos Networks
 
 | Network | Architecture | Status |
 |---|---|---|
-| Avail | Substrate (SCALE) | Active |
-| Starknet | StarkWare / STARK proofs | Active |
-| Fuel2 | FuelVM / UTXO | Active |
+| Avail | Substrate (SCALE) | Building |
+| Starknet | StarkWare / STARK proofs | Building |
+
 
 > **Future networks** — the platform is designed to be extended to any PoS architecture. See [Architecture](docs/architecture.md) for details on adding new chains.
 
