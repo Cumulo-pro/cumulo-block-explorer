@@ -141,7 +141,7 @@ await fs.rename(tmpPath, finalPath);
 | Network Type | Interval | Rationale |
 |---|---|---|
 | Cosmos Hub | 6s | ~6s block time |
-| Celestia | 12s | ~12s block time |
+| Celestia | 6s | ~6s block time |
 | Story | 3s | ~2–3s block time |
 | Avail | 20s | ~20s block time |
 | Governance | 30s | Low-frequency changes |
