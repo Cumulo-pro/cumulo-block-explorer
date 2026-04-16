@@ -237,7 +237,7 @@ echo $response;
 ### Server Layout (Per Network)
 
 ```
-Server (OVH / Hetzner)
+Server 
 ├── /opt/<chain>-collector/
 │   ├── <chain>-collector.js       # Collector script
 │   ├── package.json
