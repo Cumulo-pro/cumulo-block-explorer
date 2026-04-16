@@ -22,7 +22,7 @@ The architecture follows three core principles:
 
 1. **No database** — All state is held in JSON files on disk. The collector overwrites them on every cycle. The frontend reads them over HTTP. This eliminates a class of operational failures (database outages, schema migrations, replication lag) and makes the entire stack trivially portable.
 
-2. **Collector co-location** — Each collector runs on the same server as the validator node it monitors. This means RPC calls are local-network or loopback, with zero public internet latency or rate-limit risk.
+2. **Collector co-location** — Each collector runs on the same server as the RPC node it monitors. This means RPC calls are local-network or loopback, with zero public internet latency or rate-limit risk.
 
 3. **Uniform module surface** — Every supported network exposes the same seven modules (Validators, Blocks, Uptime, Governance, Stats, Consensus, Decentralization) regardless of the underlying chain architecture. Network-specific data normalization happens inside the collector, not in the frontend.
 
