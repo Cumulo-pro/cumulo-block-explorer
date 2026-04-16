@@ -34,7 +34,7 @@ Public block explorers (Mintscan, Ping.pub, Big Dipper, etc.) are built for gene
 
 ### Why In-House
 
-Cumulo runs its own validator nodes. The collectors that power this explorer run on the **same infrastructure** as the validators themselves, with direct RPC access and zero intermediaries. This means:
+Cumulo runs its own validator nodes. The collectors that power this explorer run on the **same infrastructure** as the nodes themselves, with direct RPC access and zero intermediaries. This means:
 
 - Sub-second data freshness (collection intervals of 3–12 seconds depending on block time)
 - Complete control over what metrics are collected and how they are computed
