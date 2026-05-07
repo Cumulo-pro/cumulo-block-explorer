@@ -1,6 +1,6 @@
 # Cumulo Block Explorer
 
-> **Infrastructure-grade, self-hosted blockchain explorer suite** built by [Cumulo](https://cumulo.com.es) — a professional Proof-of-Stake validator operating across 15+ networks.
+> **Infrastructure-grade, self-hosted blockchain explorer suite** built by [Cumulo](https://cumulo.com.es) - a professional Proof-of-Stake validator operating across 15+ networks.
 
 ---
 
@@ -19,18 +19,18 @@
 
 ## Why Cumulo Built Its Own Explorer
 
-As a professional validator studio, Cumulo requires deep, real-time visibility into the networks it secures — visibility that public explorers simply do not provide.
+As a professional validator studio, Cumulo requires deep, real-time visibility into the networks it secures - visibility that public explorers simply do not provide.
 
 ### The Problem with Generic Explorers
 
 Public block explorers (Mintscan, Ping.pub, Big Dipper, etc.) are built for general audiences. They excel at user-facing functions like browsing transactions and checking balances, but fall short for the operational needs of a validator:
 
-- **Data freshness** — public explorers introduce indirection layers that delay metric updates by minutes
-- **Validator-centric metrics** — uptime windows, signing histories, and jailing events are not surfaced in the granularity operators need
-- **Governance monitoring** — tracking live tally data and vote participation across multiple networks simultaneously is not feasible on third-party tools
-- **Decentralization analysis** — no public explorer computes regional, country, hosting-provider, or voting-power concentration indices in real time
-- **Multi-network parity** — each network-specific explorer has a different UI and API surface; building our own ensures a uniform experience across all chains
-- **Data ownership** — relying on third-party infrastructure for operational metrics is a single point of failure; self-hosted means we control uptime, latency, and access
+- **Data freshness** - public explorers introduce indirection layers that delay metric updates by minutes
+- **Validator-centric metrics** - uptime windows, signing histories, and jailing events are not surfaced in the granularity operators need
+- **Governance monitoring** - tracking live tally data and vote participation across multiple networks simultaneously is not feasible on third-party tools
+- **Decentralization analysis** - no public explorer computes regional, country, hosting-provider, or voting-power concentration indices in real time
+- **Multi-network parity** - each network-specific explorer has a different UI and API surface; building our own ensures a uniform experience across all chains
+- **Data ownership** - relying on third-party infrastructure for operational metrics is a single point of failure; self-hosted means we control uptime, latency, and access
 
 ### Why In-House
 
@@ -91,7 +91,7 @@ Each module is served from **static JSON files** written by a background collect
 | Starknet | StarkWare / STARK proofs | Building |
 
 
-> **Future networks** — the platform is designed to be extended to any PoS architecture. See [Architecture](docs/architecture.md) for details on adding new chains.
+> **Future networks** - the platform is designed to be extended to any PoS architecture. See [Architecture](docs/architecture.md) for details on adding new chains.
 
 ---
 
@@ -137,19 +137,19 @@ Full architecture documentation → [docs/architecture.md](docs/architecture.md)
 
 Brief descriptions of each module; full details in [docs/modules.md](docs/modules.md).
 
-**Validators** — Real-time table of all active, inactive, and jailed validators with voting power, commission rate, uptime score (last 150 blocks), token delegation, and Keybase-resolved identity avatars.
+**Validators** - Real-time table of all active, inactive, and jailed validators with voting power, commission rate, uptime score (last 150 blocks), token delegation, and Keybase-resolved identity avatars.
 
-**Blocks** — Live stream of produced blocks including height, timestamp, proposer, transaction count, and gas consumed. Clickable cards reveal per-block detail.
+**Blocks** - Live stream of produced blocks including height, timestamp, proposer, transaction count, and gas consumed. Clickable cards reveal per-block detail.
 
-**Uptime** — Block-level signing history for every validator rendered as a color-coded strip. Green = signed, red = missed. Sortable by uptime percentage or missed-block count.
+**Uptime** - Block-level signing history for every validator rendered as a color-coded strip. Green = signed, red = missed. Sortable by uptime percentage or missed-block count.
 
-**Governance** — Full proposal lifecycle tracking: deposit period, voting period, and final tally. Live YES/NO/ABSTAIN/NO\_WITH\_VETO percentages with voter address list.
+**Governance** - Full proposal lifecycle tracking: deposit period, voting period, and final tally. Live YES/NO/ABSTAIN/NO\_WITH\_VETO percentages with voter address list.
 
-**Stats** — Key network health indicators: staking ratio, inflation rate, community pool, circulating supply, average block time, and transaction throughput.
+**Stats** - Key network health indicators: staking ratio, inflation rate, community pool, circulating supply, average block time, and transaction throughput.
 
-**Consensus** — Live CometBFT round state showing current height, round, step, and per-validator prevote/precommit participation.
+**Consensus** - Live CometBFT round state showing current height, round, step, and per-validator prevote/precommit participation.
 
-**Decentralization** — Geographic map and numerical indices (regional, country, hosting, voting-power HHI) that measure how decentralized the validator set is.
+**Decentralization** - Geographic map and numerical indices (regional, country, hosting, voting-power HHI) that measure how decentralized the validator set is.
 
 ---
 
