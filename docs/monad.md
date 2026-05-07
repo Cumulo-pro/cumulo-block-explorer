@@ -1,8 +1,8 @@
-# Monad Explorer — Technical Documentation
+# Monad Explorer - Technical Documentation
 
 > This document covers the Monad-specific implementation of the Cumulo Block Explorer.
 > Monad uses a **fundamentally different architecture** from the Cosmos SDK chains documented
-> in `architecture.md` — there is no backend collector, no CometBFT RPC, and no Cosmos REST API.
+> in `architecture.md` - there is no backend collector, no CometBFT RPC, and no Cosmos REST API.
 
 ---
 
@@ -30,14 +30,14 @@ All data is fetched **directly from public Monad RPC endpoints** by the user's b
 | **RPC protocol** | CometBFT + Cosmos REST | Ethereum JSON-RPC |
 | **Refresh** | Collector writes every 6s; frontend reads | Frontend fetches every 6s directly |
 | **Backend required** | Yes (nginx + collector) | No (PHP serves HTML only) |
-| **Rate limit risk** | None (local RPC) | Yes (public endpoints — mitigated by RPC failover) |
+| **Rate limit risk** | None (local RPC) | Yes (public endpoints - mitigated by RPC failover) |
 
 ### Request flow
 
 ```
 User browser
     │
-    ├── PHP (layout + page shell — served once)
+    ├── PHP (layout + page shell - served once)
     │
     └── JavaScript / React (runs in browser)
             │
@@ -74,23 +74,23 @@ https://rpc-mainnet.monadinfra.com
 
 ## Data Sources
 
-### 1. Ethereum JSON-RPC (primary — all pages except validators/geo)
+### 1. Ethereum JSON-RPC (primary - all pages except validators/geo)
 
 Standard EVM JSON-RPC methods, sent as batched HTTP POST requests to minimize round trips.
 
 | Method | Used by | Data extracted |
 |---|---|---|
 | `eth_getBlockByNumber("latest", false)` | All pages | Latest block number, timestamp, miner, tx count, gas |
-| `eth_getBlockByNumber("safe", false)` | Performance | Voted (QC) block — MonadBFT stage 2 |
-| `eth_getBlockByNumber("finalized", false)` | Performance | Finalized (QC²) block — MonadBFT stage 3 |
+| `eth_getBlockByNumber("safe", false)` | Performance | Voted (QC) block - MonadBFT stage 2 |
+| `eth_getBlockByNumber("finalized", false)` | Performance | Finalized (QC²) block - MonadBFT stage 3 |
 | `eth_getBlockByNumber("pending", false)` | Performance | Pending tx count (mempool depth) |
 | `eth_getBlockByNumber(hex, true)` | Performance, Blocks | Full block with transactions (type, input data) |
 | `eth_feeHistory(100, "latest", [10,50,90])` | Performance | Gas used ratio, priority fee percentiles |
 | `eth_blockNumber` | Performance | Current chain head |
 
-**Batch requests:** Multiple calls are sent as a JSON array in a single HTTP request (`rpcBatch`), reducing latency significantly — e.g., fetching 20 block headers costs 1 HTTP round trip instead of 20.
+**Batch requests:** Multiple calls are sent as a JSON array in a single HTTP request (`rpcBatch`), reducing latency significantly - e.g., fetching 20 block headers costs 1 HTTP round trip instead of 20.
 
-### 2. gmonads.com API (secondary — validators and geo pages only)
+### 2. gmonads.com API (secondary - validators and geo pages only)
 
 ```
 https://www.gmonads.com/api/v1/public/
@@ -103,7 +103,7 @@ https://www.gmonads.com/api/v1/public/
 | `/blocks/1m` | `testnet` / `mainnet` | stats.php, blocks.php | Block stats |
 | `/blocks/aggregated-hourly` | `testnet` / `mainnet` | stats.php | Hourly aggregated block data |
 
-> **Note:** The `?network=` parameter is always specified explicitly. Without it, gmonads defaults to testnet — both instances must pass the parameter to avoid cross-contamination.
+> **Note:** The `?network=` parameter is always specified explicitly. Without it, gmonads defaults to testnet - both instances must pass the parameter to avoid cross-contamination.
 
 ---
 
@@ -128,14 +128,14 @@ Accepts block numbers and transaction hashes. Resolves via `eth_getBlockByNumber
 Chain-level statistics combining gmonads aggregated data with direct RPC calls. Shows total transactions, validator count, block time averages, and network growth trends.
 
 ### Chain Performance (`performance.php`)
-The most technically distinctive page — 100% direct RPC, zero third-party APIs. See the [Metrics Reference](#metrics-reference) section below for full detail.
+The most technically distinctive page - 100% direct RPC, zero third-party APIs. See the [Metrics Reference](#metrics-reference) section below for full detail.
 
 ### Node Map (`geo.php`)
 World map of validator node locations from `gmonads.com/api/v1/public/validators/geolocations`. Fetched server-side to avoid CORS.
 
 ---
 
-## Chain Performance — Metrics Reference
+## Chain Performance - Metrics Reference
 
 The Performance page (`performance.php`) has two tabs: **Live Data** and **Metrics Reference** (also documented here for the repository).
 
@@ -153,40 +153,40 @@ Monad uses **MonadBFT**, a BFT consensus protocol that decouples execution from 
 | Stage | RPC tag | Description |
 |---|---|---|
 | **Proposed** | `"latest"` | Block produced by current slot validator. Has not yet received a QC. |
-| **Voted** | `"safe"` | Received a **Quorum Certificate** (QC) — 2/3+ validators signed. ~1 block lag. |
+| **Voted** | `"safe"` | Received a **Quorum Certificate** (QC) - 2/3+ validators signed. ~1 block lag. |
 | **Finalized** | `"finalized"` | Received **QC²** (two consecutive QCs). Irreversible. ~2 blocks / <1s from proposal. |
 
-The lag badges show both the block distance and estimated time (`lag × avgBlockTime`). Raw timestamps are not used for time calculation — EVM block timestamps are integer seconds, too coarse for Monad's ~0.4s block cadence.
+The lag badges show both the block distance and estimated time (`lag × avgBlockTime`). Raw timestamps are not used for time calculation - EVM block timestamps are integer seconds, too coarse for Monad's ~0.4s block cadence.
 
 ### KPI Cards
 
-#### Row 1 — Core throughput
+#### Row 1 - Core throughput
 
 | Metric | Formula | Source | Notes |
 |---|---|---|---|
 | **Live TPS** | `Σ txCount / (latest.ts − oldest.ts)` | Block headers (last 20) | Wall-clock denominator, not block-time target |
 | **Avg Block Time** | `Δ timestamp / Δ blockNumber` | Block headers (last 20) | ~0.40–0.42s on testnet |
 | **Avg Block Fullness** | `Σ gasUsed / Σ gasLimit × 100` | Block headers (last 20) | Gas limit: 200M per block |
-| **Base Fee** | Fixed constant | Protocol | Always 100 Gwei on Monad — does not adjust with demand |
+| **Base Fee** | Fixed constant | Protocol | Always 100 Gwei on Monad - does not adjust with demand |
 
-#### Row 2 — Network health
+#### Row 2 - Network health
 
 | Metric | Formula | Source | Notes |
 |---|---|---|---|
 | **Unique Proposers** | `distinct(miner)` | Block headers (last 20) | 20/20 = perfect rotation |
 | **Empty Blocks** | `count(txs=0) / total × 100` | Block headers (last 20) | Rare on Monad |
-| **Contract Calls** | `count(input≠0x) / total × 100` | Full blocks (last 20) | ~100% on testnet — DeFi-native chain |
+| **Contract Calls** | `count(input≠0x) / total × 100` | Full blocks (last 20) | ~100% on testnet - DeFi-native chain |
 | **Priority Fee** | `median(reward[][1]) / 1e9` | `eth_feeHistory(100)` | Blocks with 0 reward filtered out; uniform or zero on Monad |
 
 **Priority fee behaviour:** On Monad, the fixed base fee removes the incentive to outbid for block space. Tips are typically either zero (RPC doesn't return `reward[]`) or a uniform fixed value across all transactions.
 
-#### Row 3 — Advanced metrics
+#### Row 3 - Advanced metrics
 
 | Metric | Formula | Source | Notes |
 |---|---|---|---|
 | **Finality Time** | `finalityBlocks × avgBlockTime` | Derived | ~840ms at 2 blocks × 0.42s |
 | **Avg Txs / Block** | `Σ txCount / blockCount` | Block headers (last 20) | ~4 txs/block at current activity |
-| **Pending Txs** | `eth_getBlockByNumber("pending").transactions.length` | RPC | Near-zero on Monad — blocks absorb txs faster than they arrive |
+| **Pending Txs** | `eth_getBlockByNumber("pending").transactions.length` | RPC | Near-zero on Monad - blocks absorb txs faster than they arrive |
 | **Avg Gas / Tx** | `mean(gasUsed / txCount)` over non-empty blocks | Block headers (last 20) | ~300k gas/tx reflects contract-heavy workload |
 
 ### Capacity & Traffic
@@ -195,7 +195,7 @@ The lag badges show both the block distance and estimated time (`lag × avgBlock
 |---|---|---|
 | **Block Capacity** | `eth_feeHistory(100, "latest", [])` → `gasUsedRatio[]` | Bar chart, 100 blocks, color-coded by utilisation |
 | **Tx Type Breakdown** | `eth_getBlockByNumber(n, true)` → `tx.type` | Donut chart: Type 0 (Legacy), 1 (EIP-2930), 2 (EIP-1559), 4 (EIP-7702) |
-| **Contract vs Transfer** | `tx.input !== "0x"` | Stacked bar — complement to tx type donut |
+| **Contract vs Transfer** | `tx.input !== "0x"` | Stacked bar - complement to tx type donut |
 
 ### Block Producers Table
 
@@ -203,15 +203,15 @@ Last 20 block headers fetched in a single batched RPC request. On first load, 20
 
 ---
 
-## MonadBFT — Key Properties
+## MonadBFT - Key Properties
 
-- **~0.4s block time** — approximately 2.5 blocks per second
-- **<1s to finality** — QC² achieved within 2 blocks of proposal
-- **No reorgs** — finalized blocks are irreversible (BFT safety guarantee)
-- **Fixed base fee** — 100 Gwei, does not adjust (unlike Ethereum EIP-1559)
-- **Parallel EVM** — optimistic parallel execution; contract state access conflicts resolved at commit time
-- **200M gas limit** — ~10× Ethereum's limit; currently <1% utilised
-- **EIP-7702 active** — Type 4 transactions (account abstraction) on mainnet
+- **~0.4s block time** - approximately 2.5 blocks per second
+- **<1s to finality** - QC² achieved within 2 blocks of proposal
+- **No reorgs** - finalized blocks are irreversible (BFT safety guarantee)
+- **Fixed base fee** - 100 Gwei, does not adjust (unlike Ethereum EIP-1559)
+- **Parallel EVM** - optimistic parallel execution; contract state access conflicts resolved at commit time
+- **200M gas limit** - ~10× Ethereum's limit; currently <1% utilised
+- **EIP-7702 active** - Type 4 transactions (account abstraction) on mainnet
 
 ---
 
@@ -232,7 +232,7 @@ services/
 │   └── geo.php
 │
 └── monad/                  # Mainnet explorer (Chain ID: 143)
-    └── (identical structure — generated via sed substitution)
+    └── (identical structure - generated via sed substitution)
 ```
 
 ### Mainnet generation
