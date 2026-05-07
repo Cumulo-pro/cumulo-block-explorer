@@ -18,7 +18,7 @@ Each supported network exposes the same seven modules. Data normalization happen
 
 ## Validators
 
-**Purpose** — Complete, real-time view of the validator set for operators, delegators, and researchers.
+**Purpose** - Complete, real-time view of the validator set for operators, delegators, and researchers.
 
 ### Data Displayed
 
@@ -39,12 +39,12 @@ Each supported network exposes the same seven modules. Data normalization happen
 
 ### Frontend Features
 
-- **Sortable table** — click any column header to sort ascending/descending
-- **Filter** — live search by moniker or operator address
-- **Status badges** — color-coded BONDED / UNBONDING / UNBONDED / JAILED
-- **Keybase avatars** — validator logos resolved from on-chain identity hashes
-- **Detail panel** — clicking a validator row opens an expanded card with full metrics
-- **Real-time updates** — table refreshes every 6 seconds without page reload
+- **Sortable table** - click any column header to sort ascending/descending
+- **Filter** - live search by moniker or operator address
+- **Status badges** - color-coded BONDED / UNBONDING / UNBONDED / JAILED
+- **Keybase avatars** - validator logos resolved from on-chain identity hashes
+- **Detail panel** - clicking a validator row opens an expanded card with full metrics
+- **Real-time updates** - table refreshes every 6 seconds without page reload
 
 ### Data Flow
 
@@ -59,7 +59,7 @@ Keybase /user/lookup.json  →  avatar URL (24h cache)
 
 ## Blocks
 
-**Purpose** — Live stream of produced blocks for monitoring network activity and confirming transaction inclusion.
+**Purpose** - Live stream of produced blocks for monitoring network activity and confirming transaction inclusion.
 
 ### Data Displayed
 
@@ -75,11 +75,11 @@ Keybase /user/lookup.json  →  avatar URL (24h cache)
 
 ### Frontend Features
 
-- **Live block cards** — new cards animate in at the top as blocks are produced
-- **Block detail overlay** — click any card to see full block metadata and transaction list
-- **Transaction list** — raw transaction hashes with type and gas details
-- **Block time indicator** — running average block time display
-- **Pagination** — "Load more" button to inspect historical blocks
+- **Live block cards** - new cards animate in at the top as blocks are produced
+- **Block detail overlay** - click any card to see full block metadata and transaction list
+- **Transaction list** - raw transaction hashes with type and gas details
+- **Block time indicator** - running average block time display
+- **Pagination** - "Load more" button to inspect historical blocks
 
 ### Data Flow
 
@@ -93,7 +93,7 @@ CometBFT /block?height=N-1, N-2, ...  →  recent block window (collector cache)
 
 ## Uptime
 
-**Purpose** — Block-level signing history for every validator in the set, allowing operators and delegators to assess validator reliability.
+**Purpose** - Block-level signing history for every validator in the set, allowing operators and delegators to assess validator reliability.
 
 ### Data Displayed
 
@@ -133,16 +133,16 @@ The default window is **150 blocks**, which at a 6-second block time corresponds
 
 ### Frontend Features
 
-- **Sortable** — by uptime percentage or missed block count
-- **Block strip** — visual bar of the last N blocks; hover shows block height and signed/missed status
-- **Color scale** — uptime above 99% is green, 95–99% is yellow, below 95% is red
-- **Real-time updates** — refreshes as new blocks arrive
+- **Sortable** - by uptime percentage or missed block count
+- **Block strip** - visual bar of the last N blocks; hover shows block height and signed/missed status
+- **Color scale** - uptime above 99% is green, 95–99% is yellow, below 95% is red
+- **Real-time updates** - refreshes as new blocks arrive
 
 ---
 
 ## Governance
 
-**Purpose** — Complete governance proposal tracker covering the full proposal lifecycle from deposit through voting to final result.
+**Purpose** - Complete governance proposal tracker covering the full proposal lifecycle from deposit through voting to final result.
 
 ### Proposal Lifecycle
 
@@ -195,17 +195,17 @@ The collector attempts v1 first and falls back to v1beta1 automatically.
 
 ### Frontend Features
 
-- **Proposal cards** — each proposal is a card with status badge, title, and quick tally summary
-- **Live tally bar** — horizontal stacked bar showing YES/NO/ABSTAIN/VETO percentages
-- **Voter list** — expandable list of voter addresses and their vote option
-- **Timeline** — visual timeline showing deposit end and voting end dates
-- **Quorum indicator** — percentage of bonded tokens that have voted
+- **Proposal cards** - each proposal is a card with status badge, title, and quick tally summary
+- **Live tally bar** - horizontal stacked bar showing YES/NO/ABSTAIN/VETO percentages
+- **Voter list** - expandable list of voter addresses and their vote option
+- **Timeline** - visual timeline showing deposit end and voting end dates
+- **Quorum indicator** - percentage of bonded tokens that have voted
 
 ---
 
 ## Stats
 
-**Purpose** — Key network health metrics in a single dashboard for monitoring staking economics and network performance.
+**Purpose** - Key network health metrics in a single dashboard for monitoring staking economics and network performance.
 
 ### Metrics Displayed
 
@@ -239,15 +239,15 @@ The collector attempts v1 first and falls back to v1beta1 automatically.
 
 ### Frontend Features
 
-- **KPI cards** — large numeric display with metric label and unit
-- **Trend indicators** — up/down arrows with percentage change vs. previous cycle
-- **Real-time updates** — all figures refresh every 6 seconds
+- **KPI cards** - large numeric display with metric label and unit
+- **Trend indicators** - up/down arrows with percentage change vs. previous cycle
+- **Real-time updates** - all figures refresh every 6 seconds
 
 ---
 
 ## Consensus
 
-**Purpose** — Live view of the CometBFT consensus state machine, showing which validators have voted at each round step.
+**Purpose** - Live view of the CometBFT consensus state machine, showing which validators have voted at each round step.
 
 ### Data Displayed
 
@@ -264,7 +264,7 @@ The collector attempts v1 first and falls back to v1beta1 automatically.
 
 ### Data Source
 
-CometBFT exposes the live consensus state at `/consensus_state` (RPC). The collector fetches this every 2 seconds — faster than block production — and writes `consensus.json`.
+CometBFT exposes the live consensus state at `/consensus_state` (RPC). The collector fetches this every 2 seconds - faster than block production - and writes `consensus.json`.
 
 ### Use Cases
 
@@ -276,7 +276,7 @@ CometBFT exposes the live consensus state at `/consensus_state` (RPC). The colle
 
 ## Decentralization
 
-**Purpose** — Quantitative analysis of validator set decentralization across geographic, hosting, and economic dimensions.
+**Purpose** - Quantitative analysis of validator set decentralization across geographic, hosting, and economic dimensions.
 
 ### Indices
 
@@ -315,7 +315,7 @@ The [Herfindahl-Hirschman Index](https://en.wikipedia.org/wiki/Herfindahl%E2%80%
 
 ### Frontend Features
 
-- **World map** — interactive Leaflet.js map with one marker per validator node
-- **Index gauges** — four colored gauges (0–100) for each decentralization dimension
-- **Provider breakdown** — table of hosting providers with validator count and power share
-- **Country breakdown** — table of countries with validator count and map highlighting
+- **World map** - interactive Leaflet.js map with one marker per validator node
+- **Index gauges** - four colored gauges (0–100) for each decentralization dimension
+- **Provider breakdown** - table of hosting providers with validator count and power share
+- **Country breakdown** - table of countries with validator count and map highlighting
