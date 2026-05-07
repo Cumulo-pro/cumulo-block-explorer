@@ -1,6 +1,6 @@
 # Cumulo Block Explorer
 
-> **Infrastructure-grade, self-hosted blockchain explorer suite** built by [Cumulo](https://cumulo.com.es) - a professional Proof-of-Stake validator operating across 15+ networks.
+> **Infrastructure-grade, self-hosted blockchain explorer suite** built by [Cumulo](https://cumulo.com.es)
 
 ---
 
