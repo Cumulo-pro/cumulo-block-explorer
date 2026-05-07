@@ -1,9 +1,7 @@
-# Espresso Explorer - Technical Documentation
+# Espresso Explorer. Technical Documentation
 
 > This document covers the Espresso-specific implementation of the Cumulo Block Explorer.
-> Espresso uses a **fundamentally different architecture** from both the Cosmos SDK chains documented
-> in `architecture.md` and the Monad Explorer documented in `monad.md` - it uses a server-side
-> Node.js collector writing a shared JSON file, not browser-side RPC fetching, and not CometBFT/Cosmos REST.
+> Espresso uses a server-side Node.js collector writing a shared JSON file, not browser-side RPC fetching.
 
 ---
 
