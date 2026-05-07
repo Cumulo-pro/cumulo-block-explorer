@@ -33,7 +33,7 @@ uptime = signed_blocks / (signed_blocks + missed_blocks) × 100
 
 **Important distinctions:**
 - This is a **short-window** uptime metric, designed to surface recent signing behavior quickly. It is not equivalent to the chain's native `missed_blocks_counter` from the slashing module, which uses a different sliding window defined in the chain's slashing parameters.
-- A validator can have 100% explorer uptime but have been jailed previously — jailing history is a separate field.
+- A validator can have 100% explorer uptime but have been jailed previously - jailing history is a separate field.
 - Tombstoned validators are always displayed as 0% uptime regardless of recent signing.
 
 **Industry context:** Most explorers (Mintscan, Ping.pub) display uptime over a 100–10,000 block window. The 150-block window is deliberately short to give validators and delegators a real-time health signal.
@@ -50,8 +50,8 @@ voting_power_pct = validator_tokens / bonded_pool_tokens × 100
 ```
 
 **Data sources:**
-- `validator_tokens` — from `/cosmos/staking/v1beta1/validators` (field: `tokens`)
-- `bonded_pool_tokens` — from `/cosmos/staking/v1beta1/pool` (field: `bonded_tokens`)
+- `validator_tokens` - from `/cosmos/staking/v1beta1/validators` (field: `tokens`)
+- `bonded_pool_tokens` - from `/cosmos/staking/v1beta1/pool` (field: `bonded_tokens`)
 
 **Note:** `tokens` and `bonded_tokens` are raw amounts in the base denomination (e.g., `uatom` for Cosmos Hub, 1 ATOM = 1,000,000 uatom). Division is performed in floating point after converting to integers, which is safe for percentage display but should not be used for on-chain computations.
 
@@ -79,8 +79,8 @@ voting_power_pct = validator_tokens / bonded_pool_tokens × 100
 **Definition:** A validator is jailed when it violates a slashing condition and is temporarily removed from the active set.
 
 **Sources:**
-- `jailed: true/false` — from `/cosmos/staking/v1beta1/validators`
-- `jailed_until` — from `/cosmos/slashing/v1beta1/signing_infos`; zero value (`1970-01-01`) means not jailed
+- `jailed: true/false` - from `/cosmos/staking/v1beta1/validators`
+- `jailed_until` - from `/cosmos/slashing/v1beta1/signing_infos`; zero value (`1970-01-01`) means not jailed
 
 **Slashing conditions** (Cosmos SDK standard):
 - **Downtime slash:** Missing more than `signed_blocks_window × (1 - min_signed_per_window)` blocks in the slashing window → jail + small slash (default 0.01% on Cosmos Hub)
@@ -196,9 +196,9 @@ pct_veto    = no_with_veto / total_votes × 100
 **Implementation note:** Token amounts are very large integers (up to 10^24 on some chains). All arithmetic uses JavaScript `BigInt` to avoid precision loss.
 
 **Standard:** Cosmos SDK governance requires:
-- `quorum` — minimum participation (default 33.4% of bonded tokens)
-- `threshold` — YES must exceed 50% of non-ABSTAIN votes
-- `veto_threshold` — NO_WITH_VETO must not exceed 33.4% of all votes
+- `quorum` - minimum participation (default 33.4% of bonded tokens)
+- `threshold` - YES must exceed 50% of non-ABSTAIN votes
+- `veto_threshold` - NO_WITH_VETO must not exceed 33.4% of all votes
 
 These thresholds are governance parameters and vary by chain.
 
@@ -228,7 +228,7 @@ All indices are on a **0–100 scale** where **100 = perfectly decentralized** a
 Regional Index = (unique_regions / total_validators) × 100
 ```
 
-**Regions used:** Continental taxonomy — Europe, North America, South America, Asia, Africa, Oceania, Middle East.
+**Regions used:** Continental taxonomy - Europe, North America, South America, Asia, Africa, Oceania, Middle East.
 
 **Interpretation:** A value of 50 means validators are spread across half the possible regions. A value of 100 means each validator is in a different region (maximum geographic spread relative to validator count).
 
