@@ -1,8 +1,8 @@
-# Espresso Explorer — Technical Documentation
+# Espresso Explorer - Technical Documentation
 
 > This document covers the Espresso-specific implementation of the Cumulo Block Explorer.
 > Espresso uses a **fundamentally different architecture** from both the Cosmos SDK chains documented
-> in `architecture.md` and the Monad Explorer documented in `monad.md` — it uses a server-side
+> in `architecture.md` and the Monad Explorer documented in `monad.md` - it uses a server-side
 > Node.js collector writing a shared JSON file, not browser-side RPC fetching, and not CometBFT/Cosmos REST.
 
 ---
@@ -15,7 +15,7 @@
 
 All data is collected **server-side** by a Node.js daemon that polls the Espresso HotShot Query API
 every 30 seconds and writes an atomic JSON snapshot. The PHP/HTML frontend fetches that snapshot
-from a CDN-like data endpoint and re-renders the page every 30 seconds — **no direct API calls
+from a CDN-like data endpoint and re-renders the page every 30 seconds - **no direct API calls
 from the browser**.
 
 ---
@@ -36,7 +36,7 @@ from the browser**.
 ### Request flow
 
 ```
-Node.js collector (server — every 30s)
+Node.js collector (server - every 30s)
     │
     ├── GET /v1/node/stake-table/current   ──► query.main.net.espresso.network
     ├── GET /v1/status/block-height        ──► query.main.net.espresso.network
@@ -78,7 +78,7 @@ All data comes from a single public REST endpoint. No authentication is required
 | `GET /v1/availability/block/{height}/namespace/{ns_id}` | Transactions in a specific namespace for a block |
 
 **Timeouts:** Each request has a 12-second fetch timeout (`FETCH_TIMEOUT = 12000`). Requests run in
-`Promise.allSettled()` — failed requests produce `null` and are skipped gracefully.
+`Promise.allSettled()` - failed requests produce `null` and are skipped gracefully.
 
 ### Validator identity probing (secondary)
 
@@ -130,18 +130,18 @@ calculations.
 
 ---
 
-## Collector — Data Pipeline
+## Collector - Data Pipeline
 
 The collector (`espresso-mainnet-collector.js`) runs on a 30-second interval and executes
 these steps on each cycle:
 
-### Step 0 — Load previous rollupStats
+### Step 0 - Load previous rollupStats
 
 Before fetching anything, the collector reads the existing `data.json` and restores the persistent
 `rollupStats` accumulator. This allows rollup transaction history to span thousands of blocks
 without losing data between collector restarts.
 
-### Step 1 — Parallel core fetch
+### Step 1 - Parallel core fetch
 
 Four API calls are fired simultaneously with `Promise.allSettled`:
 - Stake table (validator set)
@@ -149,7 +149,7 @@ Four API calls are fired simultaneously with `Promise.allSettled`:
 - Vote participation map
 - Block reward
 
-### Step 2 — Process validators
+### Step 2 - Process validators
 
 For each entry in the stake table:
 - Stake amount is converted from hex wei to ESP: `Number(BigInt(hexAmount)) / 1e18`
@@ -158,18 +158,18 @@ For each entry in the stake table:
   `missed = round((1 - voteRate) * 10000) / 100`
 - Validators are sorted by stake descending and assigned `rank` and `stakePct`
 
-### Step 3 — Identity probing
+### Step 3 - Identity probing
 
 Unknown validators (name = null, connectInfo present) are probed in parallel for node identity.
 Results update `name`, `website`, `location`, and `country` fields in-place.
 
-### Step 4 — Recent blocks
+### Step 4 - Recent blocks
 
 The last 50 blocks are fetched in parallel (`/v1/availability/block/{h}`). Each block provides:
 - `height`, `timestamp`, `hash`, `size`, `txCount`, `l1Head`, `builder`, `payloadCommitment`
 - Namespace list (`_nsList`): extracted from `payload.ns_table` using three fallback strategies (see below)
 
-### Step 4b — Namespace transactions
+### Step 4b - Namespace transactions
 
 For blocks that have both `txCount > 0` and a non-empty `_nsList`, the collector fetches each
 `(block, namespace)` pair: `/v1/availability/block/{h}/namespace/{ns_id}`.
@@ -179,10 +179,10 @@ Each transaction is recorded as:
 { namespace, height, timestamp, builder, posInNs }
 ```
 
-Transaction hashes (`TX~...`) are **not stored** — the official hash scheme could not be reliably
+Transaction hashes (`TX~...`) are **not stored** - the official hash scheme could not be reliably
 reproduced client-side, so transactions are identified by `height·posInNs` instead.
 
-### Step 4c — Persistent rollup accumulator
+### Step 4c - Persistent rollup accumulator
 
 New transactions are merged into `rollupStats`:
 - Only transactions with `height > highWaterMark` are processed (prevents double-counting)
@@ -192,7 +192,7 @@ New transactions are merged into `rollupStats`:
 
 **Window size:** ~2000 blocks ≈ 16–17 hours at current Espresso block cadence.
 
-### Step 5 — Atomic write
+### Step 5 - Atomic write
 
 The final JSON is written to a `.tmp` file and renamed atomically. `_nsList` is stripped from blocks
 before writing.
@@ -261,15 +261,15 @@ assigned by `id % 5`.
 Block payloads use a binary namespace table format. The collector tries three strategies to parse it:
 
 ```
-Strategy A — ns_table is an array of objects:
+Strategy A - ns_table is an array of objects:
   payload.ns_table[i].namespace_id  (or .ns_id / .namespace / .id)
 
-Strategy B — ns_table has a base64-encoded binary 'bytes' field:
+Strategy B - ns_table has a base64-encoded binary 'bytes' field:
   buf[0..3] = numNss (LE uint32)
   Entries at stride 8 (ns_id u32 + end_offset u32)
   or stride 16 (ns_id u64 + end_offset u64)
 
-Strategy C — payload object has numeric keys:
+Strategy C - payload object has numeric keys:
   Object.keys(payload).filter(k => /^\d+/.test(k))
 ```
 
@@ -334,7 +334,7 @@ Recent transaction feed from `data.json/recentTransactions`. Displays up to the 
 transactions with rollup badge, block height, and position-in-namespace.
 
 **Transaction identifier format:** `#height · Tx posInNs` (e.g. `#123,456 · Tx 3`).  
-Transaction hashes are not shown — users are directed to the official Espresso explorer for hashes.
+Transaction hashes are not shown - users are directed to the official Espresso explorer for hashes.
 
 **Namespace filter tab:** Shows all known namespaces from recent transactions; clicking a tab
 filters to that rollup only.
@@ -355,7 +355,7 @@ of `data.json/validators`.
 
 ---
 
-## HotShot Consensus — Key Properties
+## HotShot Consensus - Key Properties
 
 Espresso uses **HotShot**, a BFT consensus protocol developed by Espresso Systems:
 
