@@ -40,7 +40,7 @@ This document provides the configuration reference for each network supported by
 **Notable characteristics:**
 - Reference implementation of Cosmos SDK; all standard endpoints available
 - Ed25519 consensus keys (standard)
-- IBC hub — high governance activity
+- IBC hub - high governance activity
 
 ---
 
@@ -60,7 +60,7 @@ This document provides the configuration reference for each network supported by
 | API Endpoint | `https://celestia.api.cumulo.org.es` |
 
 **Notable characteristics:**
-- Data Availability (DA) layer — blocks contain data blobs in addition to standard transactions
+- Data Availability (DA) layer - blocks contain data blobs in addition to standard transactions
 - Longer block time (12s) means the 150-block uptime window covers ~30 minutes instead of ~15
 - Governance v1 API
 
@@ -98,7 +98,7 @@ This document provides the configuration reference for each network supported by
 | SDK | Story Protocol (custom Cosmos fork) |
 | Block Time | ~2–3 seconds |
 | Bond Denom | `atto` (1 IP = 10^18 atto) |
-| Bech32 Prefix | N/A — operator addresses are `0x` hex |
+| Bech32 Prefix | N/A - operator addresses are `0x` hex |
 | Collector Interval | 3,000 ms |
 | Uptime Window | 150 blocks (~7 min) |
 | RPC Endpoint | `http://92.42.106.179:26647` |
@@ -163,7 +163,7 @@ const data = response.msg ?? response;
 | Collector Interval | 6,000 ms |
 
 **Notable characteristics:**
-- RollApp hub — hosts settlement for application-specific rollups
+- RollApp hub - hosts settlement for application-specific rollups
 - EVM-compatible address space
 
 ---
@@ -213,9 +213,9 @@ const data = response.msg ?? response;
 | Account format | bech32 | SS58 |
 
 **SCALE codec decoding:** The Avail collector implements custom decoders for:
-- `Vec<AccountId32>` — compact-length-prefixed list of 32-byte account IDs
-- `u64` — little-endian 64-bit integer
-- `Option<u32>` — optional 32-bit integer with presence byte
+- `Vec<AccountId32>` - compact-length-prefixed list of 32-byte account IDs
+- `u64` - little-endian 64-bit integer
+- `Option<u32>` - optional 32-bit integer with presence byte
 
 ---
 
