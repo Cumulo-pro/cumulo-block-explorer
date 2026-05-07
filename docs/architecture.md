@@ -20,11 +20,11 @@ This document describes the technical architecture of the Cumulo Block Explorer:
 
 The architecture follows three core principles:
 
-1. **No database** — All state is held in JSON files on disk. The collector overwrites them on every cycle. The frontend reads them over HTTP. This eliminates a class of operational failures (database outages, schema migrations, replication lag) and makes the entire stack trivially portable.
+1. **No database** - All state is held in JSON files on disk. The collector overwrites them on every cycle. The frontend reads them over HTTP. This eliminates a class of operational failures (database outages, schema migrations, replication lag) and makes the entire stack trivially portable.
 
-2. **Collector co-location** — Each collector runs on the same server as the RPC node it monitors. This means RPC calls are local-network or loopback, with zero public internet latency or rate-limit risk.
+2. **Collector co-location** - Each collector runs on the same server as the RPC node it monitors. This means RPC calls are local-network or loopback, with zero public internet latency or rate-limit risk.
 
-3. **Uniform module surface** — Every supported network exposes the same seven modules (Validators, Blocks, Uptime, Governance, Stats, Consensus, Decentralization) regardless of the underlying chain architecture. Network-specific data normalization happens inside the collector, not in the frontend.
+3. **Uniform module surface** - Every supported network exposes the same seven modules (Validators, Blocks, Uptime, Governance, Stats, Consensus, Decentralization) regardless of the underlying chain architecture. Network-specific data normalization happens inside the collector, not in the frontend.
 
 ---
 
@@ -105,15 +105,15 @@ The collector is a Node.js process with a single responsibility: **produce a con
 
 Each collection cycle:
 
-1. **Fetch block data** from CometBFT RPC — latest block height, block hash, proposer, transactions, timestamps
-2. **Fetch validator set** from REST API — operator addresses, voting power, commission, status, slashing info
-3. **Fetch staking pool** — bonded and unbonded token totals
-4. **Fetch inflation** — current inflation rate from the mint module
-5. **Fetch supply** — total and circulating supply per denomination
-6. **Fetch governance** — proposals and live tally (on a longer cycle, e.g., 30s)
-7. **Fetch consensus state** — live CometBFT round state
-8. **Enrich** — resolve Keybase avatars (cached for 24h), decode bech32 addresses
-9. **Write** — atomically write `data.json`, `governance.json`, and `consensus.json`
+1. **Fetch block data** from CometBFT RPC - latest block height, block hash, proposer, transactions, timestamps
+2. **Fetch validator set** from REST API - operator addresses, voting power, commission, status, slashing info
+3. **Fetch staking pool** - bonded and unbonded token totals
+4. **Fetch inflation** - current inflation rate from the mint module
+5. **Fetch supply** - total and circulating supply per denomination
+6. **Fetch governance** - proposals and live tally (on a longer cycle, e.g., 30s)
+7. **Fetch consensus state** - live CometBFT round state
+8. **Enrich** - resolve Keybase avatars (cached for 24h), decode bech32 addresses
+9. **Write** - atomically write `data.json`, `governance.json`, and `consensus.json`
 
 ### Atomic Writes
 
@@ -133,7 +133,7 @@ await fs.rename(tmpPath, finalPath);
 
 - All parallel fetches use `Promise.allSettled()` so a single API failure does not abort the entire cycle
 - HTTP requests have an 8-second timeout via `AbortController`
-- The collector catches all errors, logs them, and continues on the next interval — it never exits on a transient failure
+- The collector catches all errors, logs them, and continues on the next interval - it never exits on a transient failure
 - systemd `Restart=always` with `RestartSec=10` handles process crashes
 
 ### Collection Intervals
@@ -284,7 +284,7 @@ journalctl -fu <chain>-collector   # follow logs
 
 To add a new network to the explorer:
 
-### Step 1 — Create the Collector
+### Step 1 - Create the Collector
 
 Copy the closest existing collector (e.g., `cosmos-mainnet-collector.js`) and adjust:
 
@@ -304,7 +304,7 @@ const CONFIG = {
 
 If the chain uses a **non-standard API** (e.g., custom wrapper, different field names), add normalization in the `normalizeValidators()` function.
 
-### Step 2 — Deploy the Collector
+### Step 2 - Deploy the Collector
 
 ```bash
 # On the target server
@@ -315,11 +315,11 @@ cp newchain-collector.service /etc/systemd/system/
 systemctl enable --now newchain-collector
 ```
 
-### Step 3 — Configure nginx
+### Step 3 - Configure nginx
 
 Add a new server block to nginx, pointing to `/var/lib/newchain-collector`, with TLS from certbot.
 
-### Step 4 — Create Frontend
+### Step 4 - Create Frontend
 
 Copy the closest existing explorer folder (e.g., `EXPLORER COSMOS MAINNET/`) and update the data endpoint URLs and chain-specific labels (denomination, bech32 prefix, etc.).
 
