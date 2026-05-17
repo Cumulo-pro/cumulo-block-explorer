@@ -1,8 +1,8 @@
-# Espresso Explorer — Technical Documentation
+# Espresso Explorer. Technical Documentation
 
 > This document covers the Espresso-specific implementation of the Cumulo Block Explorer.
 > Espresso uses a **fundamentally different architecture** from both the Cosmos SDK chains documented
-> in `architecture.md` and the Monad Explorer documented in `monad.md` — it uses a server-side
+> in `architecture.md` and the Monad Explorer documented in `monad.md` - it uses a server-side
 > Node.js collector writing a shared JSON file, not browser-side RPC fetching, and not CometBFT/Cosmos REST.
 
 ---
@@ -15,7 +15,7 @@
 
 All data is collected **server-side** by a Node.js daemon that polls the Espresso HotShot Query API
 every 30 seconds and writes an atomic JSON snapshot. The PHP/HTML frontend fetches that snapshot
-from a CDN-like data endpoint and re-renders the page every 30 seconds — **no direct API calls
+from a CDN-like data endpoint and re-renders the page every 30 seconds - **no direct API calls
 from the browser**.
 
 ---
@@ -36,9 +36,9 @@ from the browser**.
 ### Request flow
 
 ```
-Node.js collector — two independent loops
+Node.js collector - two independent loops
 │
-├── Every 30s — Espresso HotShot loop
+├── Every 30s - Espresso HotShot loop
 │     ├── GET /v1/node/stake-table/current   ──► query.main.net.espresso.network
 │     ├── GET /v1/status/block-height        ──► (same)
 │     ├── GET /v1/hotshot-node/participation/vote/current  ──► (same)
@@ -47,7 +47,7 @@ Node.js collector — two independent loops
 │     ├── GET /v1/availability/block/{h}/namespace/{ns}  ──► (same, per namespace)
 │     └── GET {connect_info}/v1/node/identity  ──► individual validator nodes (optional)
 │
-├── Every 6h — Ethereum contract loop (at startup + interval)
+├── Every 6h - Ethereum contract loop (at startup + interval)
 │     └── POST JSON-RPC batch ──► eth-mainnet.g.alchemy.com  (1 HTTP request)
 │           ├── eth_call validators(addr)          × N addresses
 │           └── eth_call commissionTracking(addr)  × N addresses
@@ -84,7 +84,7 @@ All Espresso chain data comes from a single public REST endpoint. No authenticat
 | `GET /v1/availability/block/{height}/namespace/{ns_id}` | Transactions in a specific namespace for a block |
 
 **Timeouts:** Each request has a 12-second fetch timeout (`FETCH_TIMEOUT = 12000`). Requests run in
-`Promise.allSettled()` — failed requests produce `null` and are skipped gracefully.
+`Promise.allSettled()` - failed requests produce `null` and are skipped gracefully.
 
 ### Ethereum Staking Contract (every 6 hours)
 
@@ -104,8 +104,8 @@ This eliminates all hardcoded stake/commission values and ensures data is always
 | `commissionTracking(address)` | `0xac5c2ad0` | `(uint16 commissionBp, uint256 lastIncreaseTime)` |
 
 - `status`: `0` = Unknown, `1` = Active (registered on L1), `2` = Exited
-- `commissionBp`: commission in basis points — divide by 100 for percentage (e.g. 1000 → 10%)
-- `delegatedAmount`: total delegated stake in wei — divide by 1e18 for ESP
+- `commissionBp`: commission in basis points - divide by 100 for percentage (e.g. 1000 → 10%)
+- `delegatedAmount`: total delegated stake in wei - divide by 1e18 for ESP
 
 **Transport:** A single JSON-RPC batch POST to Alchemy containing `2 × N` `eth_call` items
 (one `validators()` + one `commissionTracking()` per known ETH address). This is **one HTTP request**
@@ -140,7 +140,7 @@ to known validator metadata:
     name:       "Blockdaemon",
     logo:       null,                      // filename in validatorsdata/vallogos/
     ethAddress: "0xfcA122749BD630d...",     // Ethereum staking contract address
-    commission: 10.00,                     // FALLBACK only — live value fetched from contract
+    commission: 10.00,                     // FALLBACK only - live value fetched from contract
   },
   ...
 }
@@ -162,14 +162,14 @@ https://raw.githubusercontent.com/Cumulo-pro/validatorsdata/main/vallogos/<filen
 
 Validators registered on the Ethereum staking contract but below the active threshold (not present
 in the HotShot stake table) are listed in `INACTIVE_VALIDATORS`. This array stores **only**
-`ethAddress`, `name`, and `logo` — stake and commission are **fetched live from the contract**,
+`ethAddress`, `name`, and `logo` - stake and commission are **fetched live from the contract**,
 not hardcoded:
 
 ```javascript
 const INACTIVE_VALIDATORS = [
   { ethAddress: "0xC86eb...", name: "Cypher Networks", logo: null       },
   { ethAddress: "0xc5052...", name: "Cumulo",           logo: "cumulo.jpg" },
-  // ... (no stake, no commission — populated from Ethereum contract)
+  // ... (no stake, no commission - populated from Ethereum contract)
 ];
 ```
 
@@ -199,11 +199,11 @@ data yet (null stake) appear at the end.
 
 ---
 
-## Collector — Data Pipeline
+## Collector - Data Pipeline
 
 The collector runs **two independent asynchronous loops**:
 
-### Loop A — Ethereum contract (every 6 hours)
+### Loop A - Ethereum contract (every 6 hours)
 
 Runs once at startup (before the first HotShot collect cycle), then every 6 hours.
 
@@ -215,15 +215,15 @@ Runs once at startup (before the first HotShot collect cycle), then every 6 hour
 The 30-second HotShot loop reads `_contractCache` on every cycle to inject live
 commission and stake values without making additional ETH calls.
 
-### Loop B — HotShot collect (every 30 seconds)
+### Loop B - HotShot collect (every 30 seconds)
 
-#### Step 0 — Load previous rollupStats
+#### Step 0 - Load previous rollupStats
 
 Before fetching anything, the collector reads the existing `data.json` and restores the persistent
 `rollupStats` accumulator. This allows rollup transaction history to span thousands of blocks
 without losing data between collector restarts.
 
-#### Step 1 — Parallel core fetch
+#### Step 1 - Parallel core fetch
 
 Four API calls are fired simultaneously with `Promise.allSettled`:
 - Stake table (active validator set)
@@ -231,7 +231,7 @@ Four API calls are fired simultaneously with `Promise.allSettled`:
 - Vote participation map
 - Block reward
 
-#### Step 2 — Process validators
+#### Step 2 - Process validators
 
 For each entry in the HotShot stake table:
 - Stake converted from hex wei to ESP: `Number(BigInt(hexAmount)) / 1e18`
@@ -240,21 +240,21 @@ For each entry in the HotShot stake table:
 - Vote participation rate cross-referenced: `missed = round((1 - voteRate) × 10000) / 100`
 - Sorted by stake descending, assigned `rank` and `stakePct`
 
-#### Step 3 — Identity probing
+#### Step 3 - Identity probing
 
 Unknown validators (name = null, connectInfo present) are probed in parallel for node identity.
 
-#### Step 4 — Recent blocks
+#### Step 4 - Recent blocks
 
 Last 50 blocks fetched in parallel. Namespace list extracted per block using three fallback
 strategies (see Namespace System section).
 
-#### Step 4b — Namespace transactions
+#### Step 4b - Namespace transactions
 
 For blocks with `txCount > 0` and a non-empty namespace list, each `(block, namespace)` pair
 is fetched. Each transaction recorded as: `{ namespace, height, timestamp, builder, posInNs }`.
 
-#### Step 4c — Persistent rollup accumulator
+#### Step 4c - Persistent rollup accumulator
 
 New transactions merged into `rollupStats`:
 - Only transactions with `height > highWaterMark` are processed (prevents double-counting)
@@ -262,7 +262,7 @@ New transactions merged into `rollupStats`:
 - High-water mark advanced to current `blockHeight`
 - Namespaces inactive for more than `ROLLUP_WINDOW = 2000` blocks are pruned (~17h)
 
-#### Step 5 — Build output and atomic write
+#### Step 5 - Build output and atomic write
 
 - Active ETH addresses extracted into a Set
 - `INACTIVE_VALIDATORS` filtered (remove any now in active set), enriched from `_contractCache`, sorted by stake desc
@@ -356,15 +356,15 @@ assigned by `id % 5`.
 Block payloads use a binary namespace table format. The collector tries three strategies:
 
 ```
-Strategy A — ns_table is an array of objects:
+Strategy A - ns_table is an array of objects:
   payload.ns_table[i].namespace_id  (or .ns_id / .namespace / .id)
 
-Strategy B — ns_table has a base64-encoded binary 'bytes' field:
+Strategy B - ns_table has a base64-encoded binary 'bytes' field:
   buf[0..3] = numNss (LE uint32)
   Entries at stride 8 (ns_id u32 + end_offset u32)
   or stride 16 (ns_id u64 + end_offset u64)
 
-Strategy C — payload object has numeric keys:
+Strategy C - payload object has numeric keys:
   Object.keys(payload).filter(k => /^\d+/.test(k))
 ```
 
@@ -423,7 +423,7 @@ transaction count, block size, L1 head anchor, block hash (truncated).
 
 > **Note on builder:** The `builder` field is the sequencer address that constructed the block,
 > not the consensus validator. In the current Espresso mainnet, one or very few sequencers are
-> active so the same address repeats across most blocks — this is expected network behavior,
+> active so the same address repeats across most blocks - this is expected network behavior,
 > not a display bug.
 
 Clicking a block navigates to `block?height={h}`.
@@ -438,7 +438,7 @@ Recent transaction feed from `data.json/recentTransactions`. Displays up to the 
 transactions with rollup badge, block height, and position-in-namespace.
 
 **Transaction identifier format:** `#height · Tx posInNs` (e.g. `#123,456 · Tx 3`).  
-Transaction hashes are not shown — users are directed to the official Espresso explorer for hashes.
+Transaction hashes are not shown - users are directed to the official Espresso explorer for hashes.
 
 **Namespace filter tab:** Shows all known namespaces from recent transactions; clicking a tab
 filters to that rollup only.
@@ -459,7 +459,7 @@ of `data.json/validators`.
 
 ---
 
-## HotShot Consensus — Key Properties
+## HotShot Consensus - Key Properties
 
 Espresso uses **HotShot**, a BFT consensus protocol developed by Espresso Systems:
 
@@ -516,7 +516,7 @@ to the official explorer for canonical hash lookups.
 
 **Why fetch validator data from the Ethereum contract?**
 The HotShot stake table API only returns data for **active** validators (those above the activation
-threshold). Inactive validators — registered on the Ethereum staking contract but not yet active —
+threshold). Inactive validators - registered on the Ethereum staking contract but not yet active -
 have no presence in the HotShot API. Additionally, the stake table does not include commission rates.
 Querying the Ethereum staking contract (`StakeTableV2`) directly provides:
 - Commission rates for all validators (active and inactive)
@@ -527,11 +527,11 @@ This is done as a single JSON-RPC batch every 6 hours (validator registrations a
 change rarely), keeping Ethereum RPC usage at ~70k Alchemy CU/month.
 
 **Why keep `VALIDATOR_MAP` and `INACTIVE_VALIDATORS` as static lists?**
-The Ethereum staking contract has no enumeration function — it cannot return the full list of
+The Ethereum staking contract has no enumeration function - it cannot return the full list of
 registered validators. The only way to discover all validators is to parse historical
 `RegisterValidator` events from the contract. The static lists serve as the known-address registry.
 `name` and `logo` are off-chain data with no on-chain equivalent, so they always require manual
-maintenance. Only `stake` and `commission` — the on-chain data — are now fetched dynamically.
+maintenance. Only `stake` and `commission` - the on-chain data - are now fetched dynamically.
 
 ---
 
