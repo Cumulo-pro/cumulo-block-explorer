@@ -126,8 +126,6 @@ The file grows incrementally — new events are deduplicated by block height and
 | `events[].proposer` | Validator who ultimately committed the block |
 | `validatorStats` | Cumulative proposed + missed counts per operator address |
 
-**Storage estimate:** ~300 bytes per event. At Celestia mainnet miss rates (<0.5%), the file grows by less than 5 MB per year.
-
 ### Atomic writes
 
 The file is written atomically using the same pattern as `data.json`:
@@ -196,8 +194,8 @@ Avatars are resolved from the current validator set on each cycle — not stored
 ## Frontend Page
 
 **Routes:**
-- Mainnet: `/services/celestia/missed-proposals`
-- Mocha testnet: `/services/celestia_mocha/missed-proposals`
+- Mainnet: `https://cumulo.pro/services/celestia/missed-proposals`
+- Mocha testnet: `https://cumulo.pro/services/celestia_mocha/missed-proposals`
 
 **Data source:** `data.json` via `DATA_URL`, polled every 6 seconds (same as all other explorer pages).
 
@@ -226,7 +224,7 @@ Avatars are resolved from the current validator set on each cycle — not stored
 
 ## Networks
 
-| Network | Chain ID | Collector file | History file |
-|---|---|---|---|
-| Celestia Mainnet | `celestia` | `celestia-collector.js` | `/var/lib/celestia-collector/missed-proposals.json` |
-| Celestia Mocha | `mocha-4` | `celestia-mocha-collector.js` | `/var/lib/celestia-mocha-collector/missed-proposals.json` |
+| Network | Chain ID | Collector file | History file | Dashboard |
+|---|---|---|---|---|
+| Celestia Mainnet | `celestia` | `celestia-collector.js` | `/var/lib/celestia-collector/missed-proposals.json` | [cumulo.pro/services/celestia/missed-proposals](https://cumulo.pro/services/celestia/missed-proposals) |
+| Celestia Mocha | `mocha-4` | `celestia-mocha-collector.js` | `/var/lib/celestia-mocha-collector/missed-proposals.json` | [cumulo.pro/services/celestia_mocha/missed-proposals](https://cumulo.pro/services/celestia_mocha/missed-proposals) |
