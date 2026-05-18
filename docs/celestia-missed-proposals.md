@@ -1,12 +1,12 @@
-# Celestia — Missed Proposals Tracker
+# Celestia. Missed Proposals Tracker
 
-> **Network-specific feature** — This module goes beyond standard Cosmos SDK metrics. It applies the CometBFT weighted round-robin proposer selection algorithm to determine, with block-level precision, which validator missed their proposal turn at each consensus round.
+> **Network-specific feature** - This module goes beyond standard Cosmos SDK metrics. It applies the CometBFT weighted round-robin proposer selection algorithm to determine, with block-level precision, which validator missed their proposal turn at each consensus round.
 
 ---
 
 ## The Problem with Generic Uptime Metrics
 
-Standard Cosmos block explorers track validator signing participation via the `missed_blocks_counter` from the slashing module. This tells you whether a validator **signed** a block — but not whether it **proposed** one when it was its turn.
+Standard Cosmos block explorers track validator signing participation via the `missed_blocks_counter` from the slashing module. This tells you whether a validator **signed** a block - but not whether it **proposed** one when it was its turn.
 
 Block proposal failures are a distinct failure mode:
 
@@ -20,9 +20,9 @@ Standard metrics provide no visibility into this. The Missed Proposals tracker c
 
 ## How It Works
 
-### Step 1 — Detecting extra-round blocks
+### Step 1 - Detecting extra-round blocks
 
-Every block header includes `last_commit.round` — the consensus round at which the *previous* block was finally committed. A value of `0` means the first proposer succeeded. A value of `N > 0` means `N` validators were skipped before the block was accepted.
+Every block header includes `last_commit.round` - the consensus round at which the *previous* block was finally committed. A value of `0` means the first proposer succeeded. A value of `N > 0` means `N` validators were skipped before the block was accepted.
 
 ```
 block[H].last_commit.round = 2
@@ -30,16 +30,16 @@ block[H].last_commit.round = 2
 → 2 validators missed their proposal turn before the block was committed
 ```
 
-### Step 2 — Identifying who missed
+### Step 2 - Identifying who missed
 
 To know *which* validators missed, the collector:
 
-1. Fetches `/validators?height=H-2` — the CometBFT validator set **before** block `H-1`, including each validator's `proposer_priority` at that moment
+1. Fetches `/validators?height=H-2` - the CometBFT validator set **before** block `H-1`, including each validator's `proposer_priority` at that moment
 2. Simulates the CometBFT weighted round-robin algorithm for `commitRound` rounds
 3. The last simulated round should match the actual proposer of block `H-1` (sanity check)
 4. All rounds before the last one = validators who missed
 
-### Step 3 — CometBFT Proposer Selection Algorithm
+### Step 3 - CometBFT Proposer Selection Algorithm
 
 Celestia uses the standard CometBFT weighted round-robin (`IncrementProposerPriority`). Each round follows this sequence:
 
@@ -52,7 +52,7 @@ Celestia uses the standard CometBFT weighted round-robin (`IncrementProposerPrio
 5. Decrement the selected validator's priority by totalVotingPower
 ```
 
-The algorithm requires `BigInt` arithmetic throughout — Celestia voting power values exceed JavaScript's safe integer limit (`Number.MAX_SAFE_INTEGER`).
+The algorithm requires `BigInt` arithmetic throughout - Celestia voting power values exceed JavaScript's safe integer limit (`Number.MAX_SAFE_INTEGER`).
 
 **Key RPC endpoint used:**
 
@@ -60,7 +60,7 @@ The algorithm requires `BigInt` arithmetic throughout — Celestia voting power 
 GET /validators?height={H}&per_page=200
 ```
 
-Returns `proposer_priority` per validator — the state **after** block `H` was committed, used as the starting point to simulate rounds for block `H+1`.
+Returns `proposer_priority` per validator - the state **after** block `H` was committed, used as the starting point to simulate rounds for block `H+1`.
 
 ---
 
@@ -68,7 +68,7 @@ Returns `proposer_priority` per validator — the state **after** block `H` was 
 
 ### Collector integration
 
-The missed proposals logic runs inside the main `collect()` cycle, after uptime data is fetched and validators are assembled. It operates on `blockData` — a per-block array built as a byproduct of the uptime batch fetch:
+The missed proposals logic runs inside the main `collect()` cycle, after uptime data is fetched and validators are assembled. It operates on `blockData` - a per-block array built as a byproduct of the uptime batch fetch:
 
 ```js
 blockData.push({ h, time, proposer, commitRound, txs })
@@ -90,7 +90,7 @@ Missed events accumulate in a dedicated JSON file, separate from `data.json`:
 /var/lib/celestia-mocha-collector/missed-proposals.json  (mocha testnet)
 ```
 
-The file grows incrementally — new events are deduplicated by block height and merged on every cycle. It is never truncated; the full history since the first collector run is preserved.
+The file grows incrementally - new events are deduplicated by block height and merged on every cycle. It is never truncated; the full history since the first collector run is preserved.
 
 **File structure:**
 
@@ -119,7 +119,7 @@ The file grows incrementally — new events are deduplicated by block height and
 
 | Field | Description |
 |---|---|
-| `startBlock` | First block processed — defines the tracking window start |
+| `startBlock` | First block processed - defines the tracking window start |
 | `lastProcessedHeight` | Prevents double-counting proposed blocks across cycles |
 | `events[]` | One entry per block committed at round > 0 |
 | `events[].missed[]` | Validators who skipped, in round order (`r`: round index) |
@@ -139,7 +139,7 @@ This prevents partial reads by the frontend or concurrent processes.
 
 ---
 
-## Output — `data.json` fields
+## Output - `data.json` fields
 
 The main collector output (`data.json`) includes two new top-level arrays and two new `meta` fields:
 
@@ -187,7 +187,7 @@ Last 50 events from the history, most recent first, enriched with current avatar
 }
 ```
 
-Avatars are resolved from the current validator set on each cycle — not stored in the history file — keeping the history compact.
+Avatars are resolved from the current validator set on each cycle - not stored in the history file - keeping the history compact.
 
 ---
 
@@ -209,16 +209,16 @@ Avatars are resolved from the current validator set on each cycle — not stored
 | Recent Missed Events | `missedPropEvents` | Block, time, round, who missed (with avatars), actual proposer |
 | Proposal Statistics | `proposalStats` | Full per-validator table: proposed, missed, miss rate, vote share |
 
-**Tech stack:** React 18 (UMD/Babel, no build step), Tailwind CSS via CDN — consistent with all other explorer pages.
+**Tech stack:** React 18 (UMD/Babel, no build step), Tailwind CSS via CDN - consistent with all other explorer pages.
 
 ---
 
 ## Limitations
 
-- **Cold start** — Counts begin from the first collector run. There is no retroactive backfill from chain history.
-- **Window dependency** — Missed events are only detected within the `UPTIME_BLOCKS` batch fetched each cycle (300 blocks, ~30 min). Blocks outside this window that had `commitRound > 0` are not captured.
-- **Sanity check only** — The simulation is validated against the known actual proposer as a cross-check. If there is a mismatch (validator set changes mid-simulation, network upgrade, etc.), the event is still recorded but a warning is logged.
-- **Inactive validators** — Only bonded validators appear in `proposalStats`. Jailed or unbonded validators are excluded from the stats table.
+- **Cold start** - Counts begin from the first collector run. There is no retroactive backfill from chain history.
+- **Window dependency** - Missed events are only detected within the `UPTIME_BLOCKS` batch fetched each cycle (300 blocks, ~30 min). Blocks outside this window that had `commitRound > 0` are not captured.
+- **Sanity check only** - The simulation is validated against the known actual proposer as a cross-check. If there is a mismatch (validator set changes mid-simulation, network upgrade, etc.), the event is still recorded but a warning is logged.
+- **Inactive validators** - Only bonded validators appear in `proposalStats`. Jailed or unbonded validators are excluded from the stats table.
 
 ---
 
