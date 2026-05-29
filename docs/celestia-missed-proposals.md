@@ -1,12 +1,12 @@
-# Celestia. Missed Proposals Tracker
+# Celestia — Missed Proposals Tracker
 
-> **Network-specific feature** - This module goes beyond standard Cosmos SDK metrics. It applies the CometBFT weighted round-robin proposer selection algorithm to determine, with block-level precision, which validator missed their proposal turn at each consensus round.
+> **Network-specific feature** — This module goes beyond standard Cosmos SDK metrics. It applies the CometBFT weighted round-robin proposer selection algorithm to determine, with block-level precision, which validator missed their proposal turn at each consensus round.
 
 ---
 
 ## The Problem with Generic Uptime Metrics
 
-Standard Cosmos block explorers track validator signing participation via the `missed_blocks_counter` from the slashing module. This tells you whether a validator **signed** a block - but not whether it **proposed** one when it was its turn.
+Standard Cosmos block explorers track validator signing participation via the `missed_blocks_counter` from the slashing module. This tells you whether a validator **signed** a block — but not whether it **proposed** one when it was its turn.
 
 Block proposal failures are a distinct failure mode:
 
@@ -20,26 +20,28 @@ Standard metrics provide no visibility into this. The Missed Proposals tracker c
 
 ## How It Works
 
-### Step 1 - Detecting extra-round blocks
+### Step 1 — Detecting extra-round blocks
 
-Every block header includes `last_commit.round` - the consensus round at which the *previous* block was finally committed. A value of `0` means the first proposer succeeded. A value of `N > 0` means `N` validators were skipped before the block was accepted.
+Every block header includes `last_commit.round` — the consensus round at which the *previous* block was finally committed. A value of `0` means the first proposer succeeded. A value of `N > 0` means `N` proposal rounds failed before the block was accepted.
 
 ```
-block[H].last_commit.round = 2
-→ block[H-1] required 3 proposal attempts (rounds 0, 1, 2)
-→ 2 validators missed their proposal turn before the block was committed
+block[H].last_commit.round = 1
+→ block[H-1] required 2 proposal attempts (rounds 0 and 1)
+→ 1 validator missed their proposal turn before the block was committed
 ```
 
-### Step 2 - Identifying who missed
+This value is cross-checked against the authoritative `/commit?height=H-1` endpoint before any event is recorded (see [False Positive Prevention](#false-positive-prevention)).
 
-To know *which* validators missed, the collector:
+### Step 2 — Identifying who missed
 
-1. Fetches `/validators?height=H-2` - the CometBFT validator set **before** block `H-1`, including each validator's `proposer_priority` at that moment
-2. Simulates the CometBFT weighted round-robin algorithm for `commitRound` rounds
-3. The last simulated round should match the actual proposer of block `H-1` (sanity check)
-4. All rounds before the last one = validators who missed
+To know *which* validator missed, the collector:
 
-### Step 3 - CometBFT Proposer Selection Algorithm
+1. Fetches `/validators?height=H-2` — the CometBFT validator set **before** block `H-1`, including each validator's `proposer_priority` at that moment
+2. Simulates the CometBFT weighted round-robin algorithm for `commitRound + 1` rounds
+3. Verifies that round `commitRound` of the simulation matches the actual proposer of block `H-1` (sanity check)
+4. Rounds `0` through `commitRound - 1` = validators who missed
+
+### Step 3 — CometBFT Proposer Selection Algorithm
 
 Celestia uses the standard CometBFT weighted round-robin (`IncrementProposerPriority`). Each round follows this sequence:
 
@@ -52,7 +54,7 @@ Celestia uses the standard CometBFT weighted round-robin (`IncrementProposerPrio
 5. Decrement the selected validator's priority by totalVotingPower
 ```
 
-The algorithm requires `BigInt` arithmetic throughout - Celestia voting power values exceed JavaScript's safe integer limit (`Number.MAX_SAFE_INTEGER`).
+The algorithm requires `BigInt` arithmetic throughout — Celestia voting power values exceed JavaScript's safe integer limit (`Number.MAX_SAFE_INTEGER`).
 
 **Key RPC endpoint used:**
 
@@ -60,7 +62,182 @@ The algorithm requires `BigInt` arithmetic throughout - Celestia voting power va
 GET /validators?height={H}&per_page=200
 ```
 
-Returns `proposer_priority` per validator - the state **after** block `H` was committed, used as the starting point to simulate rounds for block `H+1`.
+Returns `proposer_priority` per validator — the state **after** block `H` was committed, used as the starting point to simulate rounds for block `H+1`.
+
+---
+
+## False Positive Prevention
+
+Reading `last_commit.round` from the block RPC endpoint can yield transient stale values under certain conditions (pruning node state, parallel batch fetching). To prevent false positives, the collector performs a mandatory cross-check against the authoritative commit endpoint **before recording any event**:
+
+```
+GET /commit?height={H}
+→ result.signed_header.commit.round  (canonical consensus round)
+```
+
+Logic applied on each candidate event:
+
+```
+canonicalRound = 0   → skip (false positive confirmed, block committed normally)
+canonicalRound < 0   → fetch failed, proceed with block value + log warning
+canonicalRound ≠ blockRound → use canonical value, log discrepancy
+```
+
+This guard eliminates false positives caused by RPC inconsistencies. Only events where `/commit` confirms `round > 0` are recorded.
+
+---
+
+## What "Missed" Actually Means
+
+A missed proposal is an **inference**, not a direct on-chain observation. The blockchain records what *did* happen, never what *didn't*.
+
+What is directly observable:
+- A block was committed at round `N > 0` — **on-chain fact**
+- The actual proposer (round `N`) — **on-chain fact**
+- The validator scheduled for round `0..N-1` by the deterministic algorithm — **mathematically computable from public data**
+
+What is inferred:
+- The scheduled validator did not successfully propose in their round — **inference** (no explicit on-chain record)
+
+This inference is the same methodology used by all CometBFT missed-proposal trackers. The important distinction is that a validator can "miss" their proposal turn for different reasons: being offline, network latency causing a timeout, or proposing a block that was rejected by peers. The tracker does not distinguish between these causes — it only records that the round was skipped.
+
+Note: if a validator appears in the block's `last_commit.signatures` (i.e., signed the block proposed by the successor), it was online at the time — meaning the miss was due to a proposal timeout, not a full outage.
+
+---
+
+## Round Semantics
+
+Different tools display the `round` field with different semantics:
+
+| Dashboard | Value shown | Meaning |
+|---|---|---|
+| **This tracker** | `Round 1` | Round at which the block was finally committed |
+| **Krews** | `Round 0` | Round at which the missed validator was scheduled |
+
+Both refer to the same event. For a single-validator miss (the most common case):
+- Our `Round 1` = the block needed one extra round
+- Krews' `Round 0` = the validator who missed was scheduled for the first round
+
+They are complementary views of the same consensus failure.
+
+---
+
+## End-to-End Verification
+
+Every event recorded by this tracker is independently verifiable using only public RPC endpoints. The following is a complete worked example using block **#11,297,453** on Celestia mainnet.
+
+### Step 1 — Confirm the block required an extra round
+
+```bash
+curl -s "https://celestia.cumulo.org.es/commit?height=11297453" | python3 -m json.tool | grep round
+# → "round": 1
+```
+
+Block 11,297,453 was committed at round 1. Independently confirmed by Mintscan (`Round 1` displayed on the block page).
+
+### Step 2 — Confirm the actual proposer (round 1)
+
+```bash
+curl -s "https://celestia.cumulo.org.es/block?height=11297453" | python3 -m json.tool | grep proposer_address
+# → "proposer_address": "3DEA7F647851564D6764306F108921BBFC29ADCE"
+```
+
+Mintscan independently shows `Proposer: senggigi` for this block.
+
+### Step 3 — Simulate the proposer selection algorithm
+
+Fetch the validator set at height 11,297,452 (state before block 11,297,453) and run the CometBFT weighted round-robin for 2 rounds:
+
+```js
+// Reproducible script — requires Node.js with native fetch (v18+)
+const RPC = "https://celestia.cumulo.org.es";
+const HEIGHT = 11297452;
+const ACTUAL_PROPOSER = "3DEA7F647851564D6764306F108921BBFC29ADCE"; // senggigi
+
+const d = await fetch(`${RPC}/validators?height=${HEIGHT}&per_page=200`).then(r => r.json());
+const vals = d.result.validators;
+const totalPower = vals.reduce((s, v) => s + BigInt(v.voting_power), 0n);
+const diffMax = 2n * totalPower;
+
+const prios = vals.map(v => ({
+  address:  v.address.toUpperCase(),
+  priority: BigInt(v.proposer_priority),
+  power:    BigInt(v.voting_power),
+}));
+
+function runRound() {
+  // 1. Rescale
+  const maxP = prios.reduce((m, p) => p.priority > m ? p.priority : m, prios[0].priority);
+  const minP = prios.reduce((m, p) => p.priority < m ? p.priority : m, prios[0].priority);
+  const diff = maxP - minP;
+  if (diff > diffMax && diff > 0n)
+    prios.forEach(p => {
+      const n = p.priority * diffMax;
+      p.priority = n >= 0n ? (n + diff/2n)/diff : -((-n + diff/2n)/diff);
+    });
+  // 2. Shift by average
+  const sum = prios.reduce((s, p) => s + p.priority, 0n);
+  const n = BigInt(prios.length);
+  const avg = sum >= 0n ? (sum + n/2n)/n : -((-sum + n/2n)/n);
+  prios.forEach(p => p.priority -= avg);
+  // 3. Increment by voting power
+  prios.forEach(p => p.priority += p.power);
+  // 4. Select highest priority (lexicographic tie-break)
+  let best = prios[0];
+  prios.forEach(p => {
+    if (p.priority > best.priority || (p.priority === best.priority && p.address < best.address))
+      best = p;
+  });
+  // 5. Decrement selected by totalPower
+  best.priority -= totalPower;
+  return best.address;
+}
+
+const round0 = runRound(); // → 126403A2CAA36DBDE0FB64A7AE72ED82979366F7
+const round1 = runRound(); // → 3DEA7F647851564D6764306F108921BBFC29ADCE  ✓ matches actual proposer
+```
+
+**Result:**
+```
+Round 0 proposer (scheduled, missed):  126403A2CAA36DBDE0FB64A7AE72ED82979366F7
+Round 1 proposer (simulated):          3DEA7F647851564D6764306F108921BBFC29ADCE
+Actual proposer (RPC + Mintscan):      3DEA7F647851564D6764306F108921BBFC29ADCE  ✓ MATCH
+```
+
+The simulation round 1 matches the actual proposer — the algorithm is verified correct for this block. Therefore round 0 is also correct.
+
+### Step 4 — Resolve the round 0 hex address to a validator
+
+```bash
+# Get the pubkey for the round-0 address
+curl -s "https://celestia.cumulo.org.es/validators?height=11297452&per_page=200" \
+  | python3 -m json.tool | grep -A3 "126403A2CAA36DBDE0FB64A7AE72ED82979366F7"
+# → "value": "1NfzJ7SfbqNONm8nVvSkvUhl9srbpv1NrOerb3LFJmI="
+
+# Map pubkey to operator address
+curl -s "https://celestia.api.cumulo.org.es/cosmos/staking/v1beta1/validators?pagination.limit=300&status=BOND_STATUS_BONDED" \
+  | python3 -m json.tool | grep -B5 "1NfzJ7SfbqNONm8nVvSkvUhl9srbpv1NrOerb3LFJmI="
+# → "operator_address": "celestiavaloper1v987evnk7hsqct7smdqpxqprhvlcxgt43kyewc"
+
+# Get moniker
+curl -s "https://celestia.api.cumulo.org.es/cosmos/staking/v1beta1/validators/celestiavaloper1v987evnk7hsqct7smdqpxqprhvlcxgt43kyewc" \
+  | python3 -m json.tool | grep moniker
+# → "moniker": "alphab.ai"
+```
+
+### Verified proof chain
+
+| Step | Claim | Source | Verifiable |
+|---|---|---|---|
+| 1 | Block 11,297,453 committed at round 1 | `/commit` RPC + Mintscan | ✓ Public |
+| 2 | Actual proposer = senggigi (`3DEA7F...ADCE`) | `/block` RPC + Mintscan | ✓ Public |
+| 3 | Algorithm round 1 = `3DEA7F...ADCE` | Simulation from public data | ✓ Reproducible |
+| 4 | Algorithm round 0 = `126403...66F7` | Same simulation | ✓ Reproducible |
+| 5 | `126403...66F7` pubkey = `1NfzJ7...JmI=` | `/validators` RPC | ✓ Public |
+| 6 | Pubkey maps to `celestiavaloper1v987...ewc` | Staking API | ✓ Public |
+| 7 | `celestiavaloper1v987...ewc` moniker = **alphab.ai** | Staking API | ✓ Public |
+
+**Conclusion:** alphab.ai was the CometBFT-scheduled proposer for round 0 of block 11,297,453 and did not successfully propose. Every step in this chain uses publicly accessible RPC endpoints and is reproducible by anyone.
 
 ---
 
@@ -68,7 +245,7 @@ Returns `proposer_priority` per validator - the state **after** block `H` was co
 
 ### Collector integration
 
-The missed proposals logic runs inside the main `collect()` cycle, after uptime data is fetched and validators are assembled. It operates on `blockData` - a per-block array built as a byproduct of the uptime batch fetch:
+The missed proposals logic runs inside the main `collect()` cycle, after uptime data is fetched and validators are assembled. It operates on `blockData` — a per-block array built as a byproduct of the uptime batch fetch:
 
 ```js
 blockData.push({ h, time, proposer, commitRound, txs })
@@ -76,10 +253,11 @@ blockData.push({ h, time, proposer, commitRound, txs })
 
 For each block where `commitRound > 0` and the previous block is contiguous in the batch, the collector:
 
-1. Fetches the validator set at `height - 2` (async, one RPC call per missed event)
-2. Runs `cometBFTRoundProposers(valSet, commitRound + 1)`
-3. Filters out the actual proposer from the missed list
-4. Appends the event to the persistent history
+1. Verifies via `/commit?height=H` that the round is canonical (false positive guard)
+2. Fetches the validator set at `height - 2` (one RPC call per missed event)
+3. Runs `cometBFTRoundProposers(valSet, commitRound + 1)`
+4. Sanity-checks that `roundAddrs[commitRound]` matches the actual block proposer
+5. Records rounds `0..commitRound-1` as missed, appends the event to the persistent history
 
 ### Persistent history file
 
@@ -90,7 +268,7 @@ Missed events accumulate in a dedicated JSON file, separate from `data.json`:
 /var/lib/celestia-mocha-collector/missed-proposals.json  (mocha testnet)
 ```
 
-The file grows incrementally - new events are deduplicated by block height and merged on every cycle. It is never truncated; the full history since the first collector run is preserved.
+The file grows incrementally — new events are deduplicated by block height and merged on every cycle. It is never truncated; the full history since the first collector run is preserved.
 
 **File structure:**
 
@@ -119,7 +297,7 @@ The file grows incrementally - new events are deduplicated by block height and m
 
 | Field | Description |
 |---|---|
-| `startBlock` | First block processed - defines the tracking window start |
+| `startBlock` | First block processed — defines the tracking window start |
 | `lastProcessedHeight` | Prevents double-counting proposed blocks across cycles |
 | `events[]` | One entry per block committed at round > 0 |
 | `events[].missed[]` | Validators who skipped, in round order (`r`: round index) |
@@ -139,7 +317,7 @@ This prevents partial reads by the frontend or concurrent processes.
 
 ---
 
-## Output - `data.json` fields
+## Output — `data.json` fields
 
 The main collector output (`data.json`) includes two new top-level arrays and two new `meta` fields:
 
@@ -150,13 +328,15 @@ Block height at which tracking began. `null` until the first cycle completes.
 Total number of missed proposal events recorded in the persistent history.
 
 ### `proposalStats[]`
-Per-validator array, sorted by `missed` descending. Only active (bonded) validators are included.
+Per-validator array, sorted by `missed` descending. Includes all bonded validators plus any jailed or unbonded validators that have accumulated missed events since tracking began — ensuring that validators who go offline do not disappear from the statistics table.
 
 ```json
 {
   "operator":    "celestiavaloper1...",
   "moniker":     "alphab.ai",
   "avatar":      "https://...",
+  "active":      true,
+  "jailed":      false,
   "proposed":    1,
   "missed":      1,
   "missRate":    50.000,
@@ -170,6 +350,8 @@ Per-validator array, sorted by `missed` descending. Only active (bonded) validat
 | `missed` | `validatorStats` in history | Real proposal slots missed since tracking start |
 | `missRate` | `missed / (proposed + missed) × 100` | Percentage of turns missed |
 | `votingShare` | Current validator set | Current cumulative voting power share |
+| `active` | Current staking status | `false` if jailed or unbonded |
+| `jailed` | Current staking status | `true` if currently jailed |
 
 ### `missedPropEvents[]`
 Last 50 events from the history, most recent first, enriched with current avatars.
@@ -187,7 +369,7 @@ Last 50 events from the history, most recent first, enriched with current avatar
 }
 ```
 
-Avatars are resolved from the current validator set on each cycle - not stored in the history file - keeping the history compact.
+Avatars are resolved from the current validator set on each cycle — not stored in the history file — keeping the history compact.
 
 ---
 
@@ -209,16 +391,18 @@ Avatars are resolved from the current validator set on each cycle - not stored i
 | Recent Missed Events | `missedPropEvents` | Block, time, round, who missed (with avatars), actual proposer |
 | Proposal Statistics | `proposalStats` | Full per-validator table: proposed, missed, miss rate, vote share |
 
-**Tech stack:** React 18 (UMD/Babel, no build step), Tailwind CSS via CDN - consistent with all other explorer pages.
+Jailed or unbonded validators with accumulated misses appear in the Proposal Statistics table with a **JAILED** / **INACTIVE** badge and reduced opacity, ensuring their historical data remains visible.
+
+**Tech stack:** React 18 (UMD/Babel, no build step), Tailwind CSS via CDN — consistent with all other explorer pages.
 
 ---
 
 ## Limitations
 
-- **Cold start** - Counts begin from the first collector run. There is no retroactive backfill from chain history.
-- **Window dependency** - Missed events are only detected within the `UPTIME_BLOCKS` batch fetched each cycle (300 blocks, ~30 min). Blocks outside this window that had `commitRound > 0` are not captured.
-- **Sanity check only** - The simulation is validated against the known actual proposer as a cross-check. If there is a mismatch (validator set changes mid-simulation, network upgrade, etc.), the event is still recorded but a warning is logged.
-- **Inactive validators** - Only bonded validators appear in `proposalStats`. Jailed or unbonded validators are excluded from the stats table.
+- **Cold start** — Counts begin from the first collector run. There is no retroactive backfill from chain history.
+- **Window dependency** — Missed events are only detected within the `UPTIME_BLOCKS` batch fetched each cycle (150 blocks, ~30 min). Blocks outside this window that had `commitRound > 0` are not captured.
+- **Inference, not observation** — The tracker identifies *which* validator was scheduled to propose in each failed round. It cannot determine *why* the proposal failed (offline, timeout, proposal rejected). A validator that signed the committed block was online; one that did not sign may have been offline.
+- **Validator set changes** — If the active validator set changes mid-simulation (e.g., immediately after a network upgrade or a large stake change), the sanity check may fail. The event is still recorded with a warning logged.
 
 ---
 
