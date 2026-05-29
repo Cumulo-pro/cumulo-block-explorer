@@ -43,16 +43,29 @@ To know *which* validator missed, the collector:
 
 ### Step 3 — CometBFT Proposer Selection Algorithm
 
-Celestia uses the standard CometBFT weighted round-robin (`IncrementProposerPriority`). Each round follows this sequence:
+#### What is weighted round-robin?
+
+In a simple round-robin, each validator takes turns proposing one block at a time in a fixed cycle. In a **weighted** round-robin, validators with more voting power (stake) get proportionally more turns — a validator with 10% of the total stake should propose roughly 10% of all blocks over time.
+
+CometBFT achieves this through a `proposer_priority` score maintained for every validator. The priority accumulates over rounds and is reset after each proposal. The key property is that **the system is deterministic and stateless** — given the validator set and their priorities at any block height, anyone can compute exactly who will be selected as proposer for every future round without needing any additional information.
+
+#### The `IncrementProposerPriority` algorithm
+
+Each round follows this sequence (defined in the [CometBFT spec](https://github.com/cometbft/cometbft/blob/main/spec/consensus/proposer-selection.md)):
 
 ```
 1. Rescale priorities if spread exceeds 2 × totalVotingPower
-2. Shift all priorities by the average (zero-center)
+   (prevents priority overflow over long periods)
+2. Shift all priorities by the average (zero-center the distribution)
 3. Increment every validator's priority by its voting power
-4. Select the validator with the highest priority
+   (validators "earn" priority each round they don't propose)
+4. Select the validator with the highest priority as proposer
    (tie-break: lexicographically smaller hex address wins)
 5. Decrement the selected validator's priority by totalVotingPower
+   (the proposer "spends" their accumulated priority)
 ```
+
+Over time this guarantees each validator proposes in proportion to their stake. A high-stake validator will reach the top of the priority ranking more frequently because their priority grows faster (step 3).
 
 The algorithm requires `BigInt` arithmetic throughout — Celestia voting power values exceed JavaScript's safe integer limit (`Number.MAX_SAFE_INTEGER`).
 
@@ -410,3 +423,16 @@ Jailed or unbonded validators with accumulated misses appear in the Proposal Sta
 |---|---|---|---|---|
 | Celestia Mainnet | `celestia` | `celestia-collector.js` | `/var/lib/celestia-collector/missed-proposals.json` | [cumulo.pro/services/celestia/missed-proposals](https://cumulo.pro/services/celestia/missed-proposals) |
 | Celestia Mocha | `mocha-4` | `celestia-mocha-collector.js` | `/var/lib/celestia-mocha-collector/missed-proposals.json` | [cumulo.pro/services/celestia_mocha/missed-proposals](https://cumulo.pro/services/celestia_mocha/missed-proposals) |
+
+---
+
+## References
+
+| Source | Description |
+|---|---|
+| [CometBFT — Proposer Selection Spec](https://github.com/cometbft/cometbft/blob/main/spec/consensus/proposer-selection.md) | Official specification of the weighted round-robin proposer selection algorithm (`IncrementProposerPriority`) |
+| [CometBFT — validator_set.go](https://github.com/cometbft/cometbft/blob/main/types/validator_set.go) | Reference implementation of `IncrementProposerPriority` in Go |
+| [CometBFT RPC — `/commit`](https://docs.cometbft.com/v0.38/rpc/#/Info/commit) | Authoritative endpoint for the canonical consensus round of a committed block |
+| [CometBFT RPC — `/validators`](https://docs.cometbft.com/v0.38/rpc/#/Info/validators) | Returns the validator set with `proposer_priority` at a given height |
+| [Celestia Docs — Consensus](https://docs.celestia.org/learn/how-celestia-works/consensus) | Overview of how Celestia uses CometBFT consensus |
+| [Cumulo Medium — Beyond Uptime](https://medium.com/cumulo-pro/beyond-uptime-how-celestia-validators-performance-metrics-changed-after-matcha-v6-9cbbcbdcfec1) | Context on why proposal metrics matter specifically for Celestia after Matcha v6 |
