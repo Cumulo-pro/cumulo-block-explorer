@@ -1,12 +1,12 @@
 # Celestia : Missed Proposals Tracker
 
-> **Network-specific feature** - This module goes beyond standard Cosmos SDK metrics. It applies the CometBFT weighted round-robin proposer selection algorithm to determine, with block-level precision, which validator missed their proposal turn at each consensus round.
+> **Network-specific feature**. This module goes beyond standard Cosmos SDK metrics. It applies the CometBFT weighted round-robin proposer selection algorithm to determine, with block-level precision, which validator missed their proposal turn at each consensus round.
 
 ---
 
 ## The Problem with Generic Uptime Metrics
 
-Standard Cosmos block explorers track validator signing participation via the `missed_blocks_counter` from the slashing module. This tells you whether a validator **signed** a block - but not whether it **proposed** one when it was its turn.
+Standard Cosmos block explorers track validator signing participation via the `missed_blocks_counter` from the slashing module. This tells you whether a validator **signed** a block, but not whether it **proposed** one when it was its turn.
 
 Block proposal failures are a distinct failure mode:
 
@@ -20,9 +20,9 @@ Standard metrics provide no visibility into this. The Missed Proposals tracker c
 
 ## How It Works
 
-### Step 1 - Detecting extra-round blocks
+### Step 1. Detecting extra-round blocks
 
-Every block header includes `last_commit.round` - the consensus round at which the *previous* block was finally committed. A value of `0` means the first proposer succeeded. A value of `N > 0` means `N` proposal rounds failed before the block was accepted.
+Every block header includes `last_commit.round`, the consensus round at which the *previous* block was finally committed. A value of `0` means the first proposer succeeded. A value of `N > 0` means `N` proposal rounds failed before the block was accepted.
 
 ```
 block[H].last_commit.round = 1
@@ -32,22 +32,22 @@ block[H].last_commit.round = 1
 
 This value is cross-checked against the authoritative `/commit?height=H-1` endpoint before any event is recorded (see [False Positive Prevention](#false-positive-prevention)).
 
-### Step 2 - Identifying who missed
+### Step 2. Identifying who missed
 
 To know *which* validator missed, the collector:
 
-1. Fetches `/validators?height=H-2` - the CometBFT validator set **before** block `H-1`, including each validator's `proposer_priority` at that moment
+1. Fetches `/validators?height=H-2`, which returns the CometBFT validator set **before** block `H-1`, including each validator's `proposer_priority` at that moment
 2. Simulates the CometBFT weighted round-robin algorithm for `commitRound + 1` rounds
 3. Verifies that round `commitRound` of the simulation matches the actual proposer of block `H-1` (sanity check)
 4. Rounds `0` through `commitRound - 1` = validators who missed
 
-### Step 3 - CometBFT Proposer Selection Algorithm
+### Step 3. CometBFT Proposer Selection Algorithm
 
 #### What is weighted round-robin?
 
-In a simple round-robin, each validator takes turns proposing one block at a time in a fixed cycle. In a **weighted** round-robin, validators with more voting power (stake) get proportionally more turns - a validator with 10% of the total stake should propose roughly 10% of all blocks over time.
+In a simple round-robin, each validator takes turns proposing one block at a time in a fixed cycle. In a **weighted** round-robin, validators with more voting power (stake) get proportionally more turns. A validator with 10% of the total stake should propose roughly 10% of all blocks over time.
 
-CometBFT achieves this through a `proposer_priority` score maintained for every validator. The priority accumulates over rounds and is reset after each proposal. The key property is that **the system is deterministic and stateless** - given the validator set and their priorities at any block height, anyone can compute exactly who will be selected as proposer for every future round without needing any additional information.
+CometBFT achieves this through a `proposer_priority` score maintained for every validator. The priority accumulates over rounds and is reset after each proposal. The key property is that **the system is deterministic and stateless**. Given the validator set and their priorities at any block height, anyone can compute exactly who will be selected as proposer for every future round without needing any additional information.
 
 #### The `IncrementProposerPriority` algorithm
 
@@ -67,7 +67,7 @@ Each round follows this sequence (defined in the [CometBFT spec](https://github.
 
 Over time this guarantees each validator proposes in proportion to their stake. A high-stake validator will reach the top of the priority ranking more frequently because their priority grows faster (step 3).
 
-The algorithm requires `BigInt` arithmetic throughout - Celestia voting power values exceed JavaScript's safe integer limit (`Number.MAX_SAFE_INTEGER`).
+The algorithm requires `BigInt` arithmetic throughout. Celestia voting power values exceed JavaScript's safe integer limit (`Number.MAX_SAFE_INTEGER`).
 
 **Key RPC endpoint used:**
 
@@ -75,7 +75,7 @@ The algorithm requires `BigInt` arithmetic throughout - Celestia voting power va
 GET /validators?height={H}&per_page=200
 ```
 
-Returns `proposer_priority` per validator - the state **after** block `H` was committed, used as the starting point to simulate rounds for block `H+1`.
+Returns `proposer_priority` per validator. The state **after** block `H` was committed, used as the starting point to simulate rounds for block `H+1`.
 
 ---
 
@@ -110,17 +110,17 @@ What is directly observable:
 - The validator scheduled for round `0..N-1` by the deterministic algorithm - **mathematically computable from public data**
 
 What is inferred:
-- The scheduled validator did not successfully propose in their round - **inference** (no explicit on-chain record)
+- The scheduled validator did not successfully propose in their round  **inference** (no explicit on-chain record)
 
-This inference is the same methodology used by all CometBFT missed-proposal trackers. The important distinction is that a validator can "miss" their proposal turn for different reasons: being offline, network latency causing a timeout, or proposing a block that was rejected by peers. The tracker does not distinguish between these causes - it only records that the round was skipped.
+This inference is the same methodology used by all CometBFT missed-proposal trackers. The important distinction is that a validator can "miss" their proposal turn for different reasons: being offline, network latency causing a timeout, or proposing a block that was rejected by peers. The tracker does not distinguish between these causes, it only records that the round was skipped.
 
-Note: if a validator appears in the block's `last_commit.signatures` (i.e., signed the block proposed by the successor), it was online at the time - meaning the miss was due to a proposal timeout, not a full outage.
+Note: if a validator appears in the block's `last_commit.signatures` (i.e., signed the block proposed by the successor), it was online at the time, meaning the miss was due to a proposal timeout, not a full outage.
 
 ---
 
 ## Round Semantics
 
-The `round` field in each event represents the consensus round at which the block was **finally committed** - not the round where the miss occurred.
+The `round` field in each event represents the consensus round at which the block was **finally committed**, not the round where the miss occurred.
 
 For the most common case (a single validator miss):
 
