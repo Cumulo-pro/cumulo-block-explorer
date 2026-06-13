@@ -84,13 +84,13 @@ RPC transport: HTTP POST, batch supported (`rpcBatch`). All calls target `http:/
 
 ---
 
-## Collector - Data Pipeline
+## Collector. Data Pipeline
 
-### Step 0 - Load Identities
+### Step 0: Load Identities
 
 Reads `/var/lib/avail-collector/identidades.json` at startup and every hour. Supports both array and object formats. Builds a `Map` from SS58 address → identity fields (`moniker`, `legal`, `web`, `email`, `twitter`, `riot`).
 
-### Step 1 - Chain Metadata
+### Step 1: Chain Metadata
 
 Fetches in parallel: `state_getRuntimeVersion`, `system_properties`, `system_version`, latest block header, finalized block hash and header. Computes:
 
@@ -98,7 +98,7 @@ Fetches in parallel: `state_getRuntimeVersion`, `system_properties`, `system_ver
 lag = latestHeight − finalizedHeight
 ```
 
-### Step 2 - Analyze Last 20 Blocks
+### Step 2: Analyze Last 20 Blocks
 
 Fetches the last 20 block hashes in parallel, then analyzes each block:
 
@@ -112,13 +112,13 @@ Fetches the last 20 block hashes in parallel, then analyzes each block:
 - Accumulates `txCount`, `daCount`, `daBytes`, `appIds`, `totalFeeAVAIL`.
 - Fees via `payment_queryInfo` per signed extrinsic (batched in groups of 5).
 
-### Step 3 - Hourly Accumulation
+### Step 3: Hourly Accumulation
 
 Tracks `_lastAccumulatedHeight` (global, persists across cycles). Each cycle accumulates all newly finalized blocks (from `_lastAccumulatedHeight + 1` to `finalizedHeight`) using a `metricsMap` built during Step 2. This ensures every finalized block is counted exactly once, regardless of whether the tip block is empty.
 
 The `_hourAccum` bucket receives `txCount`, `daCount`, `daBytes`, `feeAvail`, `blockCount`, `uniqueAppIds`. After one hour it is flushed to `stats.json` and reset.
 
-### Step 4 - Validator Set
+### Step 4: Validator Set
 
 - Active stash list from `Session::Validators` storage (SCALE `Vec<AccountId32>`).
 - Stake data from `staking::ErasStakers` per stash (current era, paginated prefix scan).
@@ -150,7 +150,7 @@ twox64(validator_pubkey)                       [16 hex chars = 8 bytes]
 validator_pubkey (AccountId32)                 [64 hex chars = 32 bytes]
 ```
 
-### Step 5 - Computed Metrics
+### Step 5: Computed Metrics
 
 | Metric | Computation |
 |---|---|
@@ -162,7 +162,7 @@ validator_pubkey (AccountId32)                 [64 hex chars = 32 bytes]
 | `daPerMinute` | Same formula for DA submissions |
 | `bytesPerBlock` | `bytesLast20 / 20` (rounded) |
 
-### Step 6 - Write Outputs
+### Step 6: Write Outputs
 
 - **`data.json`**: atomic write every cycle (live block metrics + validator set).
 - **`stats.json`**: hourly flush of `_hourAccum` into `hours` array, then recompute `days`/`weeks`/`months` by aggregation.
