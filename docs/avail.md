@@ -1,4 +1,4 @@
-> **avail.md** - Technical documentation for the Cumulo Block Explorer: Avail Mainnet instance.
+> **avail.md** — Technical documentation for the Cumulo Block Explorer: Avail Mainnet instance.
 > Covers the Node.js collector pipeline, Substrate JSON-RPC data sources, SCALE extrinsic decoding
 > for DA detection, output schemas (data.json + stats.json), frontend module inventory, and deployment.
 
@@ -12,8 +12,9 @@
 | URL | `https://avail-mainnet.cumulo.com.es` |
 | Data endpoint (live) | `https://avail.explorer.cumulo.org.es/data.json` |
 | Data endpoint (historical) | `https://avail.explorer.cumulo.org.es/stats.json` |
-| Public RPC proxy | `https://avail.explorer.cumulo.org.es/rpc/` |
-| Direct node RPC | `http://148.72.141.245:9944` (Substrate JSON-RPC HTTP) |
+| Explorer proxy | `https://avail.explorer.cumulo.org.es/rpc/` |
+| Public RPC (HTTP) | `https://avail.rpc.cumulo.me` |
+| Public RPC (WebSocket) | `wss://avail.rpc.cumulo.me` |
 | Collector version | `avail-mainnet-collector.js v3.0` |
 | Collector interval | 12,000 ms |
 | Stats flush interval | 1 hour (`STATS_INTERVAL = 60 × 60,000 ms`) |
@@ -38,7 +39,7 @@
 ```
 Node.js collector (server - every 12s)
     │
-    ├── chain_getHeader / chain_getFinalizedHead  ──► 148.72.141.245:9944
+    ├── chain_getHeader / chain_getFinalizedHead  ──► avail.rpc.cumulo.me
     ├── state_getRuntimeVersion                  ──► (same)
     ├── system_properties / system_version       ──► (same)
     ├── chain_getBlockHash (last 20 blocks)      ──► (same, batched)
@@ -56,7 +57,7 @@ User browser ──────────────────► https://a
     │                            https://avail.explorer.cumulo.org.es/stats.json
     └── RPC calls (blocks.php)
             │
-            └── rpc.php (PHP proxy) ──► 148.72.141.245:9944
+            └── rpc.php (PHP proxy) ──► avail.rpc.cumulo.me
 ```
 
 The PHP/React frontend (Babel standalone + React 18 UMD) polls `data.json` every 30 seconds. `rpc.php` is a transparent PHP proxy that forwards browser RPC calls to the node, bypassing CORS restrictions.
@@ -79,17 +80,17 @@ The PHP/React frontend (Babel standalone + React 18 UMD) polls `data.json` every
 | `payment_queryInfo(ext, blockHash)` | `partialFee` per signed extrinsic |
 | `state_getStorage(key)` | `Session::Validators`, `staking::ErasStakers`, `staking::ErasValidatorPrefs`, `staking::CurrentEra` |
 
-RPC transport: HTTP POST, batch supported (`rpcBatch`). All calls target `http://148.72.141.245:9944`.
+RPC transport: HTTP POST, batch supported (`rpcBatch`). All calls target `http://avail.rpc.cumulo.me`.
 
 ---
 
-## Collector - Data Pipeline
+## Collector — Data Pipeline
 
-### Step 0 - Load Identities
+### Step 0 — Load Identities
 
 Reads `/var/lib/avail-collector/identidades.json` at startup and every hour. Supports both array and object formats. Builds a `Map` from SS58 address → identity fields (`moniker`, `legal`, `web`, `email`, `twitter`, `riot`).
 
-### Step 1 - Chain Metadata
+### Step 1 — Chain Metadata
 
 Fetches in parallel: `state_getRuntimeVersion`, `system_properties`, `system_version`, latest block header, finalized block hash and header. Computes:
 
@@ -97,7 +98,7 @@ Fetches in parallel: `state_getRuntimeVersion`, `system_properties`, `system_ver
 lag = latestHeight − finalizedHeight
 ```
 
-### Step 2 - Analyze Last 20 Blocks
+### Step 2 — Analyze Last 20 Blocks
 
 Fetches the last 20 block hashes in parallel, then analyzes each block:
 
@@ -111,13 +112,13 @@ Fetches the last 20 block hashes in parallel, then analyzes each block:
 - Accumulates `txCount`, `daCount`, `daBytes`, `appIds`, `totalFeeAVAIL`.
 - Fees via `payment_queryInfo` per signed extrinsic (batched in groups of 5).
 
-### Step 3 - Hourly Accumulation
+### Step 3 — Hourly Accumulation
 
 Tracks `_lastAccumulatedHeight` (global, persists across cycles). Each cycle accumulates all newly finalized blocks (from `_lastAccumulatedHeight + 1` to `finalizedHeight`) using a `metricsMap` built during Step 2. This ensures every finalized block is counted exactly once, regardless of whether the tip block is empty.
 
 The `_hourAccum` bucket receives `txCount`, `daCount`, `daBytes`, `feeAvail`, `blockCount`, `uniqueAppIds`. After one hour it is flushed to `stats.json` and reset.
 
-### Step 4 - Validator Set
+### Step 4 — Validator Set
 
 - Active stash list from `Session::Validators` storage (SCALE `Vec<AccountId32>`).
 - Stake data from `staking::ErasStakers` per stash (current era, paginated prefix scan).
@@ -149,7 +150,7 @@ twox64(validator_pubkey)                       [16 hex chars = 8 bytes]
 validator_pubkey (AccountId32)                 [64 hex chars = 32 bytes]
 ```
 
-### Step 5 - Computed Metrics
+### Step 5 — Computed Metrics
 
 | Metric | Computation |
 |---|---|
@@ -161,7 +162,7 @@ validator_pubkey (AccountId32)                 [64 hex chars = 32 bytes]
 | `daPerMinute` | Same formula for DA submissions |
 | `bytesPerBlock` | `bytesLast20 / 20` (rounded) |
 
-### Step 6 - Write Outputs
+### Step 6 — Write Outputs
 
 - **`data.json`**: atomic write every cycle (live block metrics + validator set).
 - **`stats.json`**: hourly flush of `_hourAccum` into `hours` array, then recompute `days`/`weeks`/`months` by aggregation.
@@ -230,7 +231,7 @@ validator_pubkey (AccountId32)                 [64 hex chars = 32 bytes]
 
 **`blockTxs` / `blockDA` / `blockDABytes` / `blockFeeAVAIL`**: metrics from the last *finalized* block (not the tip, which is often empty in Avail).
 
-**`nominators`**: number of accounts nominating this validator in the current era, decoded from `ErasStakers` (`PagedExposureMetadata.nominator_count`). Verified against Subscan for all 80 active validators (era 709) - exact match.
+**`nominators`**: number of accounts nominating this validator in the current era, decoded from `ErasStakers` (`PagedExposureMetadata.nominator_count`). Verified against Subscan for all 80 active validators (era 709) — exact match.
 
 ### stats.json
 
@@ -270,8 +271,8 @@ Historical overview with interactive charts. Live KPI cards (Transactions, DA Su
 **Period selector:** 7D / 30D / 90D / 1Y / All
 
 **Historical Overview subsections** (`.st-subsec` style):
-- Transactions - daily txs + fee bar charts
-- Data Availability - DA submissions + throughput bar charts
+- Transactions — daily txs + fee bar charts
+- Data Availability — DA submissions + throughput bar charts
 
 **Period Summary table:** date, txs, DA subs, DA size, fees, blocks. DA Throughput uses a per-entry sanity cap of 100 MB to filter any corrupt historical entries.
 
@@ -321,7 +322,7 @@ Accepts block numbers and validator SS58 addresses. Resolves block data via `cha
 
 ---
 
-## Avail DA - Key Properties
+## Avail DA — Key Properties
 
 ### SCALE Extrinsic Layout
 
@@ -357,7 +358,7 @@ call_index   (u8)
 
 | Constant | Value |
 |---|---|
-| DataAvailability pallet index | `0x1d` (29) - confirmed from live extrinsic inspection |
+| DataAvailability pallet index | `0x1d` (29) — confirmed from live extrinsic inspection |
 | `submitData` call index | `0x01` |
 | AppId encoding | `compact<u32>` (NOT fixed 4-byte u32) |
 
@@ -379,8 +380,8 @@ call_index   (u8)
 ## Data Verification
 
 All 80 validators (era 709) were verified against:
-1. **On-chain `staking::ErasStakers`** via Avail public RPC - `totalStake` and `ownStake` match exactly (diff = 0.000 AVAIL across all 80).
-2. **Subscan** (`avail.subscan.io/validator/[stash]`) - `totalStake`, `ownStake`, `commission`, and `nominators` verified for a representative sample (Cumulo, Ruby Nodes, Stakeway, Allnodes, Foundation 2, SubWallet Validator, STAKINGCABIN, StakerHouse, Staking4All) - all exact matches.
+1. **On-chain `staking::ErasStakers`** via Avail public RPC — `totalStake` and `ownStake` match exactly (diff = 0.000 AVAIL across all 80).
+2. **Subscan** (`avail.subscan.io/validator/[stash]`) — `totalStake`, `ownStake`, `commission`, and `nominators` verified for a representative sample (Cumulo, Ruby Nodes, Stakeway, Allnodes, Foundation 2, SubWallet Validator, STAKINGCABIN, StakerHouse, Staking4All) — all exact matches.
 
 Total network stake: **4,789.061 M AVAIL** (matches Subscan's "Total Staking 4.789B").
 
@@ -402,13 +403,13 @@ Avail's Substrate RPC does not send CORS headers, blocking cross-origin browser 
 
 **Q: Why hardcode the DA pallet index (`0x1d`) instead of parsing runtime metadata?**
 
-Runtime metadata parsing is fragile - the binary format changed between Substrate versions and is complex to decode. The pallet index for DataAvailability has been 29 (`0x1d`) since genesis. It is validated via live extrinsic inspection and documented. Any future runtime upgrade that changes it requires a one-line update.
+Runtime metadata parsing is fragile — the binary format changed between Substrate versions and is complex to decode. The pallet index for DataAvailability has been 29 (`0x1d`) since genesis. It is validated via live extrinsic inspection and documented. Any future runtime upgrade that changes it requires a one-line update.
 
 ---
 
 **Q: Why use `_lastAccumulatedHeight` instead of always using the tip block (`i=0`)?**
 
-The most recent block (tip) often arrives with no transactions - Avail's block production is ahead of finalization by 1–2 blocks, and transactions appear in finalized blocks. Using the tip for accumulation would systematically undercount DA submissions. The `_lastAccumulatedHeight` tracker ensures every finalized block is counted exactly once.
+The most recent block (tip) often arrives with no transactions — Avail's block production is ahead of finalization by 1–2 blocks, and transactions appear in finalized blocks. Using the tip for accumulation would systematically undercount DA submissions. The `_lastAccumulatedHeight` tracker ensures every finalized block is counted exactly once.
 
 ---
 
@@ -485,7 +486,7 @@ console.log('OK');
 [blake2b] ✓
 [identity] 80 entradas, 73 con moniker
 Avail Mainnet Collector v3.0
-  RPC: http://148.72.141.245:9944
+  RPC: http://avail.rpc.cumulo.me
   data.json  → /var/lib/avail-collector/data.json
   stats.json → /var/lib/avail-collector/stats.json
 [accum] +1 DA en bloques 3063213–3063213
@@ -498,10 +499,13 @@ Avail Mainnet Collector v3.0
 
 | Resource | URL |
 |---|---|
-| Avail Explorer | `https://avail-mainnet.cumulo.com.es` |
+| Cumulo Avail Explorer | `https://avail-mainnet.cumulo.com.es` |
 | Collector data (live) | `https://avail.explorer.cumulo.org.es/data.json` |
 | Collector stats (historical) | `https://avail.explorer.cumulo.org.es/stats.json` |
-| Public RPC proxy | `https://avail.explorer.cumulo.org.es/rpc/` |
+| Public RPC (HTTP) | `https://avail.rpc.cumulo.me` |
+| Public RPC (WebSocket) | `wss://avail.rpc.cumulo.me` |
+| Subscan (via Cumulo RPC) | `https://avail.subscan.io/?rpc=wss://avail.rpc.cumulo.me` |
+| Avail Explorer (via Cumulo RPC) | `https://explorer.avail.so/?rpc=wss://avail.rpc.cumulo.me` |
 | Avail Network | `https://www.availproject.org` |
 | Avail docs | `https://docs.availproject.org` |
 | Avail GitHub | `https://github.com/availproject` |
