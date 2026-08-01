@@ -1,6 +1,6 @@
 # Limonata : Missed Proposals & Slow Proposers Tracker
 
-> **Network-specific feature**. This module goes beyond standard Cosmos SDK metrics. It applies the CometBFT weighted round-robin proposer selection algorithm to determine, with block-level precision, which validator missed their proposal turn at each consensus round — and separately tracks real block latency per proposer.
+> **Network-specific feature**. This module goes beyond standard Cosmos SDK metrics. It applies the CometBFT weighted round-robin proposer selection algorithm to determine, with block-level precision, which validator missed their proposal turn at each consensus round, and separately tracks real block latency per proposer.
 
 ---
 
@@ -98,7 +98,7 @@ canonicalRound ≠ blockRound → use canonical value, log discrepancy
 
 This guard eliminates false positives caused by RPC inconsistencies. Only events where `/commit` confirms `round > 0` are recorded.
 
-**Empirically confirmed on Limonata testnet**: during initial testing, 3 out of the first 3 candidate blocks scanned (all showing `last_commit.round = 1` in the raw block header) turned out to be false positives — `/commit` confirmed `round = 0` for all three. Without this guard, the tracker would have recorded three phantom missed-proposal events against validators who had done nothing wrong. A wider sample of 20 additional blocks showed the block-header round field to be reliable outside of these transient cases.
+**Empirically confirmed on Limonata testnet**: during initial testing, 3 out of the first 3 candidate blocks scanned (all showing `last_commit.round = 1` in the raw block header) turned out to be false positives, `/commit` confirmed `round = 0` for all three. Without this guard, the tracker would have recorded three phantom missed-proposal events against validators who had done nothing wrong. A wider sample of 20 additional blocks showed the block-header round field to be reliable outside of these transient cases.
 
 ---
 
@@ -246,7 +246,7 @@ curl -s "https://api-testnet.limonata.cumulo.me/cosmos/staking/v1beta1/validator
 | 6 | Pubkey maps to `cosmosvaloper1tyrumv6...symu` | Staking API | ✓ Public |
 | 7 | `cosmosvaloper1tyrumv6...symu` and `cosmosvaloper1lv8dr4d...frgfgrs` monikers | Staking API | ✓ Public |
 
-**Conclusion:** every step in this chain uses publicly accessible RPC endpoints and is independently reproducible by anyone — no data from the collector or `data.json` was used in this verification.
+**Conclusion:** every step in this chain uses publicly accessible RPC endpoints and is independently reproducible by anyone, no data from the collector or `data.json` was used in this verification.
 
 ---
 
@@ -316,7 +316,7 @@ The file grows incrementally - new events are deduplicated by block height and m
 | `events[].missed[]` | Validators who skipped, in round order (`r`: round index) |
 | `events[].proposer` | Validator who ultimately committed the block |
 | `validatorStats` | Cumulative proposed + missed counts per operator address |
-| `latencyStats` | Cumulative block-time samples per operator address (`count`, `sum` in seconds, `max` in seconds) — powers the Slow Proposers table |
+| `latencyStats` | Cumulative block-time samples per operator address (`count`, `sum` in seconds, `max` in seconds), powers the Slow Proposers table |
 
 ### Atomic writes
 
@@ -404,7 +404,7 @@ dt = time(block[h]) − time(block[h-1])   (seconds, only if h and h-1 are conti
 
 `dt` is attributed to the proposer of `block[h]` and accumulated into `history.latencyStats[operator]` as `{ count, sum, max }`. Deltas outside `(0, 120)` seconds are discarded (collector restarts, node gaps) to avoid polluting the average with a single huge outlier.
 
-This reuses the exact same `blockData`/`sortedBD` array already built for missed-proposals detection — no extra RPC calls are needed.
+This reuses the exact same `blockData`/`sortedBD` array already built for missed-proposals detection, no extra RPC calls are needed.
 
 ### Output
 
@@ -425,7 +425,7 @@ The frontend compares `avgBlockTime` against `meta.blockTime` (the network-wide 
 
 ### Interpretation
 
-Small `count` values are noisy — a validator with 1-2 turns and a single slow block will show a misleadingly high average. Treat rows with `count < 10` as low-confidence until more samples accumulate. This is a real limitation observed in practice on Limonata testnet: several validators initially named as "slow proposers" from manual spot-checks did not reproduce the pattern once `proposerLatency` accumulated more samples per validator, while at least one validator not originally flagged (`Sr20de`) emerged as a genuine outlier only after ~9 turns.
+Small `count` values are noisy, a validator with 1-2 turns and a single slow block will show a misleadingly high average. Treat rows with `count < 10` as low-confidence until more samples accumulate. This is a real limitation observed in practice on Limonata testnet: several validators initially named as "slow proposers" from manual spot-checks did not reproduce the pattern once `proposerLatency` accumulated more samples per validator, while at least one validator not originally flagged (`Sr20de`) emerged as a genuine outlier only after ~9 turns.
 
 ---
 
