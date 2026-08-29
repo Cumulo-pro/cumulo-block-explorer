@@ -270,6 +270,50 @@ For each block where `commitRound > 0` and the previous block is contiguous in t
 4. Sanity-checks that `roundAddrs[commitRound]` matches the actual block proposer
 5. Records rounds `0..commitRound-1` as missed, appends the event to the persistent history
 
+### Extended catch-up scan
+
+Detection normally piggybacks on the block data already fetched for the uptime grid (`UPTIME_BLOCKS`: 150 blocks on mainnet, 300 on mocha, roughly the last 30 minutes). That window alone is too short to survive a restart or a brief upstream gap without missing something, so on every cycle the collector also computes:
+
+```
+missedFromH = max(lastProcessedHeight + 1, latestHeight - MISSED_SCAN_CAP)
+```
+
+If `missedFromH` falls before the uptime window, it fetches the extra blocks in between (same batched `/block?height=H` calls, in groups of 20) purely for `proposer` + `commitRound`, without the signature analysis the uptime grid needs. `MISSED_SCAN_CAP` bounds how far back a single cycle will reach - 3,000 blocks (~10h) on mainnet, 5,000 (~8h) on mocha - so a collector that was down longer than that will resume detection from the cap boundary rather than trying to scan the entire gap in one cycle.
+
+### Gap-Safe Height Tracking
+
+**Fixed 2026-08-29.** The batched block fetches above use `Promise.allSettled`, and a single rejected promise (a timeout, a transient 5xx) was silently dropped from the result set. Because `lastProcessedHeight` used to advance to `latestHeight` unconditionally every cycle regardless of which heights actually got fetched, a height that failed to fetch was never retried - if that exact height happened to be a real missed proposal, it was lost permanently, with no error surfaced anywhere.
+
+The collector now tracks which heights it actually has data for and finds the first gap in the scanned range before advancing:
+
+```js
+const presentHeights = new Set(blockData.map(b => b.h));
+let scanGapAt = null;
+for (let h = missedFromH; h <= latestH; h++) {
+  if (!presentHeights.has(h)) { scanGapAt = h; break; }
+}
+history.lastProcessedHeight = scanGapAt !== null ? scanGapAt - 1 : latestH;
+```
+
+If a gap is found, `lastProcessedHeight` stops just before it instead of jumping past it, so the next cycle (12s later on mainnet) naturally retries the missing height. On the healthy path (no gap) this is a no-op - `lastProcessedHeight` still advances to `latestHeight` exactly as before.
+
+### RPC/API Automatic Fallback
+
+**Added 2026-08-29**, after a Cumulo-node RPC pause caused a stall in data collection. Every RPC and API call (`rpc(path)` / `cosmos(path)`) is wrapped by `makeFallbackFetcher()`, backed by a short candidate list per endpoint type. Candidate `0` is always Cumulo's own node; the rest are third-party public endpoints, hand-verified (`/status` and `/cosmos/base/tendermint/v1beta1/node_info`, checking the `network` field) from the community-curated list at [`Cumulo-Front-Chain/Celestia/data`](https://github.com/Cumulo-pro/Cumulo-Front-Chain/tree/main/Celestia/data):
+
+| Network | Fallback candidates (in order) |
+|---|---|
+| Mainnet | Polkachu, kjnodes, ITRocket, NodeStake, Validatus |
+| Mocha-5 | Polkachu, ITRocket, NodesGuru, NodeStake |
+
+Behavior:
+- While the active candidate responds, there is no extra cost - the call is a single request, exactly as before this change.
+- On failure, it walks forward through the remaining candidates (and, if none of those work either, back through the earlier ones) until one succeeds, and "sticks" with that candidate for subsequent calls.
+- Every 30 calls made against a non-primary candidate, it retries Cumulo's own node once; if it responds, it switches back immediately.
+- A `[fallback]` line is logged (visible via `journalctl`) every time the active candidate changes, in either direction - this is the first thing to check when a gap or an odd cluster of events shows up in the history around a specific time.
+
+This does not by itself guarantee zero data loss - if every candidate is unreachable at once, calls still fail - but combined with [Gap-Safe Height Tracking](#gap-safe-height-tracking) above, a single node's outage (the common case) no longer stalls or corrupts collection.
+
 ### Persistent history file
 
 Missed events accumulate in a dedicated JSON file, separate from `data.json`:
@@ -325,6 +369,27 @@ await rename(MISSED_FILE + ".tmp", MISSED_FILE);
 ```
 
 This prevents partial reads by the frontend or concurrent processes.
+
+### Backups
+
+`saveMissedHistory()` also writes:
+- A daily backup (`missed-proposals.json.bak`), overwritten once per day
+- A permanent monthly backup (`missed-proposals.json.bak.YYYY-MM`), never overwritten
+
+The monthly backup's "never overwritten" guarantee is enforced by checking `existsSync(monthFile)` on disk before writing it, not an in-memory flag - a systemd restart mid-month (routine during deploys) does not re-trigger and silently destroy that month's snapshot.
+
+A companion manifest file, `missed-proposals-backups.json`, indexes every monthly backup present on disk (`{ months: [{ month, file, sizeBytes, createdAt }] }`) so the frontend can list and offer them for download without directory listing or guessing filenames. On first startup after this feature was added, `backfillMissedBackupsManifest()` scans `OUTPUT_DIR` once for any pre-existing `.bak.YYYY-MM` files and registers them retroactively, so backups written before the manifest existed are not orphaned.
+
+Both live on the same disk as the primary file, so they protect against corruption or accidental overwrites but not against total loss of the output directory. Because the full history file and the manifest are served publicly (same static-file location as `data.json`), they can also be pulled from an independent location on a schedule for off-server redundancy:
+
+```bash
+curl -s "https://celestia.explorer.cumulo.org.es/missed-proposals.json" \
+  -o "missed-proposals-$(date +%Y%m%d).json"
+```
+
+### Manual backfill (ops tool)
+
+`merge-missed-backfill.mjs`, kept alongside the mainnet collector, is a one-off recovery script for the rare case where a specific height is confirmed (via `/commit?height=H`) to be a real missed proposal but is absent from the history - for example after the gap described in [Gap-Safe Height Tracking](#gap-safe-height-tracking) above was found and fixed retroactively. It re-derives the event with the exact same algorithm (`cometBFTRoundProposers` + validator-set + moniker resolution), then merges it into the live file by height (skipping any height already present) and takes a timestamped backup of the file before writing. It is not run automatically - it is a manual last resort, invoked only after independently confirming the gap against `/commit`.
 
 ---
 
@@ -392,15 +457,28 @@ Avatars are resolved from the current validator set on each cycle - not stored i
 
 **Data source:** `data.json` via `DATA_URL`, polled every 6 seconds (same as all other explorer pages).
 
-**Key UI sections:**
+**Tabs:** the page is split into **Live** and **Archive & Stats**, so the monthly-backups list and the aggregate charts below don't compete for space with the live event feed at the top of the page.
+
+**Key UI sections (Live tab):**
 
 | Section | Data source | Description |
 |---|---|---|
 | Status bar | `meta` | Chain ID, latest block, tracking start block, network health % |
 | KPI strip | `proposalStats` aggregated | Total missed, network miss rate, health badge, blocks tracked |
 | Warning banner | `proposalStats[0]` | Shown only when at least one validator has ≥ 1 real miss |
-| Recent Missed Events | `missedPropEvents` | Block, time, round, who missed (with avatars), actual proposer |
+| Recent Missed Events | `missedPropEvents` | Block, time, round, who missed (with avatars), actual proposer, tx count |
 | Proposal Statistics | `proposalStats` | Full per-validator table: proposed, missed, miss rate, vote share |
+
+**Key UI sections (Archive & Stats tab):**
+
+| Section | Data source | Description |
+|---|---|---|
+| Health Gauge | `proposalStats` aggregated | Circular gauge of overall network proposal-success rate |
+| Top Missed Chart | `proposalStats` | Horizontal bar chart, top 10 validators by missed count |
+| Miss Rate Distribution | `proposalStats` | Histogram of validators bucketed by miss-rate severity |
+| Monthly Archives | `missed-proposals-backups.json` | One card per permanent monthly backup, with size and download link |
+
+**Export:** both the live event history and the aggregate per-validator stats can be exported as JSON or CSV (`Export JSON` / `Export CSV` buttons), client-side, from whatever is currently loaded - no extra collector endpoint involved.
 
 Jailed or unbonded validators with accumulated misses appear in the Proposal Statistics table with a **JAILED** / **INACTIVE** badge and reduced opacity, ensuring their historical data remains visible.
 
@@ -410,8 +488,9 @@ Jailed or unbonded validators with accumulated misses appear in the Proposal Sta
 
 ## Limitations
 
-- **Cold start** - Counts begin from the first collector run. There is no retroactive backfill from chain history.
-- **Window dependency** - Missed events are only detected within the `UPTIME_BLOCKS` batch fetched each cycle (150 blocks, ~30 min). Blocks outside this window that had `commitRound > 0` are not captured.
+- **Cold start** - Counts begin from the first collector run. There is no automatic retroactive backfill from chain history (a manual one-off tool exists for confirmed gaps, see [Manual backfill](#manual-backfill-ops-tool)).
+- **Bounded catch-up window** - The [extended catch-up scan](#extended-catch-up-scan) reaches back up to `MISSED_SCAN_CAP` blocks (~10h mainnet, ~8h mocha) past `lastProcessedHeight`. A collector down longer than that resumes from the cap boundary, not from where it left off - anything older is not retroactively scanned.
+- **Fallback is not infinite redundancy** - the [RPC/API fallback](#rpcapi-automatic-fallback) protects against one endpoint (including Cumulo's own) being down, not against every candidate being down simultaneously.
 - **Inference, not observation** - The tracker identifies *which* validator was scheduled to propose in each failed round. It cannot determine *why* the proposal failed (offline, timeout, proposal rejected). A validator that signed the committed block was online; one that did not sign may have been offline.
 - **Validator set changes** - If the active validator set changes mid-simulation (e.g., immediately after a network upgrade or a large stake change), the sanity check may fail. The event is still recorded with a warning logged.
 
@@ -422,7 +501,7 @@ Jailed or unbonded validators with accumulated misses appear in the Proposal Sta
 | Network | Chain ID | Collector file | History file | Dashboard |
 |---|---|---|---|---|
 | Celestia Mainnet | `celestia` | `celestia-collector.js` | `/var/lib/celestia-collector/missed-proposals.json` | [cumulo.pro/services/celestia/missed-proposals](https://cumulo.pro/services/celestia/missed-proposals) |
-| Celestia Mocha | `mocha-4` | `celestia-mocha-collector.js` | `/var/lib/celestia-mocha-collector/missed-proposals.json` | [cumulo.pro/services/celestia_mocha/missed-proposals](https://cumulo.pro/services/celestia_mocha/missed-proposals) |
+| Celestia Mocha | `mocha-5` | `celestia-mocha-collector.js` | `/var/lib/celestia-mocha-collector/missed-proposals.json` | [cumulo.pro/services/celestia_mocha/missed-proposals](https://cumulo.pro/services/celestia_mocha/missed-proposals) |
 
 ---
 
