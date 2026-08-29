@@ -297,6 +297,26 @@ history.lastProcessedHeight = scanGapAt !== null ? scanGapAt - 1 : latestH;
 
 If a gap is found, `lastProcessedHeight` stops just before it instead of jumping past it, so the next cycle (12s later on mainnet) naturally retries the missing height. On the healthy path (no gap) this is a no-op - `lastProcessedHeight` still advances to `latestHeight` exactly as before.
 
+### Early Latest-Block Detection
+
+**Added 2026-08-29**, to close most of the gap with tools that report missed proposals within a second or two of the block landing. The header-based loop above can only ever confirm heights up to `latestHeight - 1` in a given cycle, since it needs `latestHeight`'s own header to read `commitRound` for the block before it - a miss at the current tip is structurally invisible until the *next* block exists, adding a full extra block-period of latency on top of the poll interval.
+
+`/commit?height=H` returns the canonical commit round for that exact height directly, with no dependency on the following block - it's the same authoritative endpoint already used a few lines below as the false-positive cross-check (`fetchCommitRound`). Each cycle now also calls it once for the current tip:
+
+```js
+const latestBlockEntry = sortedBD[sortedBD.length - 1]; // == latestH
+if (latestBlockEntry && latestBlockEntry.h === latestH) {
+  const latestRound = await fetchCommitRound(latestH);
+  if (latestRound > 0) {
+    missedBlocks.push({ cur: { commitRound: latestRound }, prev: latestBlockEntry });
+  }
+}
+```
+
+This is purely additive - the pushed candidate flows through the exact same verification/simulation pipeline as every other candidate below. It can never double-count (the header-based loop structurally cannot confirm `latestHeight` in the same cycle, so the two paths never target the same height at once) and fails safe (if the extra call errors or finds nothing, the header-based loop still catches it one cycle later, exactly as it did before this change).
+
+**Effect:** combined with lowering the frontend's own poll interval (see [Frontend Page](#frontend-page)), worst-case end-to-end latency (chain event → visible on the page) drops from roughly one poll interval plus one full block period plus the old 6s frontend poll (~30s on mainnet, ~18s on mocha) to roughly one poll interval plus the new 2.5s frontend poll (~14.5s on mainnet, ~8.5s on mocha) - about half. These are worst-case estimates derived from the code's timing, not a stopwatch measurement of a live event. Going further (near-instant, WebSocket-driven detection matching a live-push model) was evaluated and deliberately deferred - it would require a persistent connection with its own reconnect logic, a concurrency guard against the existing interval loop, and a coordinated partial-write path into `data.json`, all of which meaningfully increase the surface area of a collector that today has none of those failure modes.
+
 ### RPC/API Automatic Fallback
 
 **Added 2026-08-29**, after a Cumulo-node RPC pause caused a stall in data collection. Every RPC and API call (`rpc(path)` / `cosmos(path)`) is wrapped by `makeFallbackFetcher()`, backed by a short candidate list per endpoint type. Candidate `0` is always Cumulo's own node; the rest are third-party public endpoints, hand-verified (`/status` and `/cosmos/base/tendermint/v1beta1/node_info`, checking the `network` field) from the community-curated list at [`Cumulo-Front-Chain/Celestia/data`](https://github.com/Cumulo-pro/Cumulo-Front-Chain/tree/main/Celestia/data):
@@ -455,7 +475,7 @@ Avatars are resolved from the current validator set on each cycle - not stored i
 - Mainnet: `https://cumulo.pro/services/celestia/missed-proposals`
 - Mocha testnet: `https://cumulo.pro/services/celestia_mocha/missed-proposals`
 
-**Data source:** `data.json` via `DATA_URL`, polled every 6 seconds (same as all other explorer pages).
+**Data source:** `data.json` via `DATA_URL`, polled every 2.5 seconds. Lowered from 6s on 2026-08-29, once the collector-side detection latency was cut (see [Early Latest-Block Detection](#early-latest-block-detection)) - the page's own poll interval had become the largest remaining piece of end-to-end latency. Client-side only; the underlying data can never change faster than the collector's own write cadence (12s mainnet, 6s mocha), so this is a reasonable floor, not pushed lower.
 
 **Tabs:** the page is split into **Live** and **Archive & Stats**, so the monthly-backups list and the aggregate charts below don't compete for space with the live event feed at the top of the page.
 
